@@ -1,0 +1,11 @@
+{
+  "name": "function_arguments",
+  "version": "0.0.1",
+  "description": "OpenVOE",
+  "private": true,
+  "dependencies": {
+    "bindings": "~1.2.1",
+    "node-addon-api": "^1.0.0"
+  },
+  "gypfile": true
+}
