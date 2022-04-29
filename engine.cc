@@ -5,18 +5,17 @@ void Initialize(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 1) {
-    Napi::TypeError::New(env, "Wrong number of arguments")
+    Napi::TypeError::New(env, "Wrong number of arguments, 1 expected")
         .ThrowAsJavaScriptException();
     return;
   }
 
-  if (!info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Wrong arguments").ThrowAsJavaScriptException();
+  if (!info[0].IsObject()) {
+    Napi::TypeError::New(env, "Wrong argument type, Object expected").ThrowAsJavaScriptException();
     return;
   }
 
-  double arg = info[0].As<Napi::Number>().DoubleValue();
-  std::cout << arg;
+  Napi::Object options = info[0].As<Napi::Object>();
   return;
 }
 
