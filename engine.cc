@@ -1,6 +1,14 @@
 #include <napi.h>
 #include <iostream>
 
+std::string json_stringify(Napi::Object input, Napi::Env env) {
+  Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
+  Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
+  Napi::Value json_object = stringify.Call(json, { input });
+  std::string json_string = json_object.ToString().Utf8Value();
+  return json_string;
+}
+
 void Initialize(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
