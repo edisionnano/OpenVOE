@@ -1,7 +1,7 @@
 {
-  "name": "function_arguments",
+  "name": "openvoe",
   "version": "0.0.1",
-  "description": "OpenVOE",
+  "description": "OpenVOE is an open source reimplementation of discord_voice.node",
   "private": true,
   "dependencies": {
     "bindings": "~1.2.1",
