@@ -27,6 +27,7 @@ void Initialize(const Napi::CallbackInfo& info) {
     return;
   }
 
+  //This is how we retrieve arguments passed to the function
   Napi::Object options = info[0].As<Napi::Object>();
   return;
 }
@@ -47,12 +48,23 @@ void SetImageDataAllocator(const Napi::CallbackInfo& info) {
   }
 
   Napi::Function allocator = info[0].As<Napi::Function>();
+  //We store the callback at a local var to access it from another function later
   allocatorCallback = allocator;
   return;
 }
 
 //This handles which functions are exported to node
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  //Construct the Degradation Preference Object 
+  //This is basically our preference as to how bad connections are handled
+  //Do we care more about the resolution, the framerate, both or nothing?
+  Napi::Object DegradationPreference = Napi::Object::New(env);
+  DegradationPreference.Set("MAINTAIN_RESOLUTION", 0);
+  DegradationPreference.Set("MAINTAIN_FRAMERATE", 1);
+  DegradationPreference.Set("BALANCED", 2);
+  DegradationPreference.Set("DISABLED", 3);
+
+  exports.Set("DegradationPreference", DegradationPreference);
   exports.Set(Napi::String::New(env, "initialize"), Napi::Function::New(env, Initialize));
   exports.Set(Napi::String::New(env, "setImageDataAllocator"), Napi::Function::New(env, SetImageDataAllocator));
   return exports;
