@@ -51,12 +51,7 @@ void SetImageDataAllocator(const Napi::CallbackInfo& info) {
   return;
 }
 
-Napi::Object Init(Napi::Env env, Napi::Object exports) {
-  exports.Set(Napi::String::New(env, "initialize"), Napi::Function::New(env, Initialize));
-  exports.Set(Napi::String::New(env, "setImageDataAllocator"), Napi::Function::New(env, SetImageDataAllocator));
-  return exports;
-}
-
+//This handles which functions are exported to node
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set(Napi::String::New(env, "initialize"), Napi::Function::New(env, Initialize));
   exports.Set(Napi::String::New(env, "setImageDataAllocator"), Napi::Function::New(env, SetImageDataAllocator));
