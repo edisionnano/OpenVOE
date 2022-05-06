@@ -2,6 +2,7 @@
 #include <iostream>
 
 Napi::Function allocatorCallback;
+Napi::Function handleVolumeChange;
 
 std::string json_stringify(Napi::Object input, Napi::Env env) {
   Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
@@ -53,9 +54,29 @@ void SetImageDataAllocator(const Napi::CallbackInfo& info) {
   return;
 }
 
+//Stubbed in the blob but Discord won't boot if we don't advertise it
+void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Wrong number of arguments, 1 expected")
+        .ThrowAsJavaScriptException();
+    return;
+  }
+
+  if (!info[0].IsFunction()) {
+    Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
+    return;
+  }
+
+  Napi::Function callback = info[0].As<Napi::Function>();
+  handleVolumeChange = callback;
+  return;
+}
+
 //This handles which functions are exported to node
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-  //Construct the Degradation Preference Object 
+  //Construct the Degradation Preference Object
   //This is basically our preference as to how bad connections are handled
   //Do we care more about the resolution, the framerate, both or nothing?
   Napi::Object DegradationPreference = Napi::Object::New(env);
@@ -67,6 +88,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("DegradationPreference", DegradationPreference);
   exports.Set(Napi::String::New(env, "initialize"), Napi::Function::New(env, Initialize));
   exports.Set(Napi::String::New(env, "setImageDataAllocator"), Napi::Function::New(env, SetImageDataAllocator));
+  exports.Set(Napi::String::New(env, "setVolumeChangeCallback"), Napi::Function::New(env, SetVolumeChangeCallback));
   return exports;
 }
 
