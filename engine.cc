@@ -2,6 +2,7 @@
 #include <iostream>
 
 //We store all callbacks as global variables so that we can access them from every function
+Napi::Function handleVoiceActivity;
 Napi::Function handleDeviceChange;
 Napi::Function allocatorCallback;
 Napi::Function handleVolumeChange;
@@ -32,6 +33,27 @@ void Initialize(const Napi::CallbackInfo& info) {
 
   //This is how we retrieve arguments passed to the function
   Napi::Object options = info[0].As<Napi::Object>();
+  return;
+}
+
+//This callback doesn't appear to be utilized
+void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Wrong number of arguments, 1 expected")
+        .ThrowAsJavaScriptException();
+    return;
+  }
+
+  if (!info[0].IsFunction()) {
+    Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
+    return;
+  }
+
+  Napi::Function voiceCallback = info[0].As<Napi::Function>();
+  //We store the callback at a global variable to access it from another function later
+  handleVoiceActivity = voiceCallback;
   return;
 }
 
@@ -72,7 +94,6 @@ void SetImageDataAllocator(const Napi::CallbackInfo& info) {
   }
 
   Napi::Function allocator = info[0].As<Napi::Function>();
-  //We store the callback at a local var to access it from another function later
   allocatorCallback = allocator;
   return;
 }
@@ -110,6 +131,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 
   exports.Set("DegradationPreference", DegradationPreference);
   exports.Set(Napi::String::New(env, "initialize"), Napi::Function::New(env, Initialize));
+  exports.Set(Napi::String::New(env, "setOnVoiceCallback"), Napi::Function::New(env, SetOnVoiceCallback));
   exports.Set(Napi::String::New(env, "setDeviceChangeCallback"), Napi::Function::New(env, SetDeviceChangeCallback));
   exports.Set(Napi::String::New(env, "setImageDataAllocator"), Napi::Function::New(env, SetImageDataAllocator));
   exports.Set(Napi::String::New(env, "setVolumeChangeCallback"), Napi::Function::New(env, SetVolumeChangeCallback));
