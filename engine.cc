@@ -130,11 +130,11 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   DegradationPreference.Set("DISABLED", 3);
 
   exports.Set("DegradationPreference", DegradationPreference);
-  exports.Set(Napi::String::New(env, "initialize"), Napi::Function::New(env, Initialize));
-  exports.Set(Napi::String::New(env, "setOnVoiceCallback"), Napi::Function::New(env, SetOnVoiceCallback));
-  exports.Set(Napi::String::New(env, "setDeviceChangeCallback"), Napi::Function::New(env, SetDeviceChangeCallback));
-  exports.Set(Napi::String::New(env, "setImageDataAllocator"), Napi::Function::New(env, SetImageDataAllocator));
-  exports.Set(Napi::String::New(env, "setVolumeChangeCallback"), Napi::Function::New(env, SetVolumeChangeCallback));
+  exports.Set("initialize", Napi::Function::New(env, Initialize));
+  exports.Set("setOnVoiceCallback", Napi::Function::New(env, SetOnVoiceCallback));
+  exports.Set("setDeviceChangeCallback", Napi::Function::New(env, SetDeviceChangeCallback));
+  exports.Set("setImageDataAllocator", Napi::Function::New(env, SetImageDataAllocator));
+  exports.Set("setVolumeChangeCallback", Napi::Function::New(env, SetVolumeChangeCallback));
   return exports;
 }
 
