@@ -1,5 +1,8 @@
 #include <napi.h>
-#include <iostream>
+
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 //We store all callbacks as global variables so that we can access them from every function
 Napi::Function handleVoiceActivity;
@@ -7,12 +10,36 @@ Napi::Function handleDeviceChange;
 Napi::Function allocatorCallback;
 Napi::Function handleVolumeChange;
 
+//We import the JSON.stringify function from the JavaScript engine
 std::string json_stringify(Napi::Object input, Napi::Env env) {
   Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
   Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
   Napi::Value json_object = stringify.Call(json, { input });
   std::string json_string = json_object.ToString().Utf8Value();
   return json_string;
+}
+
+int roundtrip(const char* ip) {
+        struct tcp_info info;
+        //We create a struct for the server info
+        struct sockaddr_in sin;
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+        //We fill the struct with the address family
+        sin.sin_family = AF_INET;
+        //the port
+        sin.sin_port = htons(80);
+        //and the ip address
+        inet_aton(ip, &sin.sin_addr);
+
+        //We connect to the server
+        connect(sock, (struct sockaddr *) &sin, sizeof(sin));
+        socklen_t tcp_info_length = sizeof info;
+        //We get the round trip time in microseconds
+        int rtt = getsockopt(sock, SOL_TCP, TCP_INFO, &info, &tcp_info_length);
+        //We close the socket since it's no longer needed
+        close(sock);
+        return rtt;
 }
 
 //Called by index.js in order to start the main loop which polls for devices etc., also gets provided with some options
@@ -118,7 +145,7 @@ void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
   return;
 }
 
-//This handles which functions are exported to node
+//This handles which objects are exported to node
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   //Construct the Degradation Preference Object
   //This is basically our preference as to how bad connections are handled
