@@ -1,8 +1,6 @@
 #include <napi.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
-#include <unistd.h>
-#include <iostream>
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -21,19 +19,6 @@ string json_stringify(Napi::Object input, Napi::Env env) {
 	Napi::Value json_object = stringify.Call(json, { input });
 	string json_string = json_object.ToString().Utf8Value();
 	return json_string;
-}
-
-//Measures how many commas a string has
-//in order to find out how many elements it contains
-int getElementsByCommas(string str) {
-        int numberOfElements = 1;
-
-        for (char& c : str) {
-                if (c == ',') {
-                        ++numberOfElements;
-                }
-        }
-        return numberOfElements;
 }
 
 //Measures the RoundTrip Time to an ip
@@ -183,7 +168,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 	string propertyNames = regionsIps.GetPropertyNames().ToString().Utf8Value();
 
-	int numberOfRegions = getElementsByCommas(propertyNames);
+	int numberOfRegions = count(propertyNames.begin(), propertyNames.end(), ',') + 1;
 
 	int rtTimes[numberOfRegions];
 	string regionNames[numberOfRegions];
@@ -191,7 +176,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 	for (int i = 0; i < numberOfRegions; i++) {
 		Napi::Object region = regionsIps.Get(i).ToObject();
 		string ips = region.Get("ips").ToString().Utf8Value();
-		int numberOfServers = getElementsByCommas(ips);
+		int numberOfServers = count(ips.begin(), ips.end(), ',') + 1;
 
 		regionNames[i] = region.Get("region").ToString().Utf8Value();
 		int avgRtt = 0;
