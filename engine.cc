@@ -25,15 +25,15 @@ string json_stringify(Napi::Object input, Napi::Env env) {
 
 //Measures how many commas a string has
 //in order to find out how many elements it contains
-int getElementsByCommas(string string) {
-	int numberOfElements = 1;
+int getElementsByCommas(string str) {
+        int numberOfElements = 1;
 
-	for (int i = 0; i < (int)string.size(); i++) {
-		if (string[i] == ',') {
-			++numberOfElements;
-		}
-	}
-	return numberOfElements;
+        for (char& c : str) {
+                if (c == ',') {
+                        ++numberOfElements;
+                }
+        }
+        return numberOfElements;
 }
 
 //Measures the RoundTrip Time to an ip
