@@ -25,10 +25,8 @@ int getElementsByCommas(string string) {
 
   //We measure how many commas the string has
   //in order to find out how many elements we have
-  for (int i = 0; i < (int)string.size(); i++)
-  {
-    if (string[i] == ',')
-    {
+  for (int i = 0; i < (int)string.size(); i++) {
+    if (string[i] == ',') {
       ++numberOfElements;
     }
   }
@@ -194,8 +192,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
   int rtTimes[numberOfRegions];
   string regionNames[numberOfRegions];
 
-  for (int i = 0; i < numberOfRegions; i++)
-  {
+  for (int i = 0; i < numberOfRegions; i++) {
     Napi::Object region = regionsIps.Get(i).ToObject();
     string ips = region.Get("ips").ToString().Utf8Value();
     int numberOfServers = getElementsByCommas(ips);
@@ -204,8 +201,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
     regionNames[i] = region.Get("region").ToString().Utf8Value();
     int avgRtt = 0;
 
-    for (int j = 0; j < numberOfServers; j++)
-    {
+    for (int j = 0; j < numberOfServers; j++) {
       string ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
       int rtt = roundtrip(ip);
       avgRtt = avgRtt + rtt;
@@ -218,8 +214,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
   //We pair region names to their average rtt
   vector< pair <int,string> > vect;
-  for (int i=0; i<numberOfRegions; i++)
-  {
+  for (int i=0; i<numberOfRegions; i++) {
     vect.push_back( make_pair(rtTimes[i],regionNames[i]) );
   }
 
@@ -230,8 +225,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
   Napi::Array rankedRegions = Napi::Array::New(env);
 
   //and fill it element by element
-  for (int i=0; i<numberOfRegions; i++)
-  {
+  for (int i=0; i<numberOfRegions; i++) {
     const auto& value = vect[i].second;
     rankedRegions[i] = value.c_str();
   }
