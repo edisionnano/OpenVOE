@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <iostream>
 #include <bits/stdc++.h>
-using namespace std;
 
 //We store all callbacks as global variables
 //so that we can access them from every function
@@ -15,17 +14,17 @@ Napi::Function handleVolumeChange;
 
 //JSON.stringify imported from the JavaScript engine
 //Will accept an Object and convert it to a string
-string json_stringify(Napi::Object input, Napi::Env env) {
+std::string json_stringify(Napi::Object input, Napi::Env env) {
 	Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
 	Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
 	Napi::Value json_object = stringify.Call(json, { input });
-	string json_string = json_object.ToString().Utf8Value();
+	std::string json_string = json_object.ToString().Utf8Value();
 	return json_string;
 }
 
 //Measures how many commas a string has
 //in order to find out how many elements it contains
-int getElementsByCommas(string str) {
+int getElementsByCommas(std::string str) {
         int numberOfElements = 1;
 
         for (char& c : str) {
@@ -40,7 +39,7 @@ int getElementsByCommas(string str) {
 //It does so by a creating a socket
 //and then connecting to this ip on port 80
 //the output is an integer and the unit is microseconds
-int roundtrip(string ip_str) {
+int roundtrip(std::string ip_str) {
 	const char* ip = ip_str.c_str();
 	struct tcp_info info;
 
@@ -75,7 +74,7 @@ void Initialize(const Napi::CallbackInfo& info) {
 
 	Napi::Object options = info[0].As<Napi::Object>();
 
-	cout << json_stringify(options, env) << endl;
+	std::cout << json_stringify(options, env) << std::endl;
 	return;
 }
 
@@ -181,23 +180,23 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 	Napi::Object regionsIps = info[0].As<Napi::Object>();
 	Napi::Function rankRtcRegionsCallback = info[1].As<Napi::Function>();
 
-	string propertyNames = regionsIps.GetPropertyNames().ToString().Utf8Value();
+	std::string propertyNames = regionsIps.GetPropertyNames().ToString().Utf8Value();
 
 	int numberOfRegions = getElementsByCommas(propertyNames);
 
 	int rtTimes[numberOfRegions];
-	string regionNames[numberOfRegions];
+	std::string regionNames[numberOfRegions];
 
 	for (int i = 0; i < numberOfRegions; i++) {
 		Napi::Object region = regionsIps.Get(i).ToObject();
-		string ips = region.Get("ips").ToString().Utf8Value();
+		std::string ips = region.Get("ips").ToString().Utf8Value();
 		int numberOfServers = getElementsByCommas(ips);
 
 		regionNames[i] = region.Get("region").ToString().Utf8Value();
 		int avgRtt = 0;
 
 		for (int j = 0; j < numberOfServers; j++) {
-			string ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
+			std::string ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
 			int rtt = roundtrip(ip);
 			avgRtt = avgRtt + rtt;
 		}
@@ -206,12 +205,12 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		rtTimes[i] = avgRtt;
 	}
 
-	vector< pair <int,string> > vect;
+	std::vector< std::pair <int,std::string> > vect;
 	for (int i=0; i<numberOfRegions; i++) {
 		vect.push_back( make_pair(rtTimes[i],regionNames[i]) );
 	}
 
-	sort(vect.begin(), vect.end());
+	std::sort(vect.begin(), vect.end());
 
 	Napi::Array rankedRegions = Napi::Array::New(env);
 
