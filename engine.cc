@@ -167,17 +167,15 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 	std::string propertyNames = regionsIps.GetPropertyNames().ToString().Utf8Value();
 
-	int numberOfRegions = count(propertyNames.begin(), propertyNames.end(), ',') + 1;
+	std::vector<int> rtTimes;
+	std::vector<std::string> regionNames;
 
-	int rtTimes[numberOfRegions];
-	std::string regionNames[numberOfRegions];
-
+	int numberOfRegions = regionsIps.GetPropertyNames().Length();
 	for (int i = 0; i < numberOfRegions; i++) {
 		Napi::Object region = regionsIps.Get(i).ToObject();
-		std::string ips = region.Get("ips").ToString().Utf8Value();
-		int numberOfServers = std::count(ips.begin(), ips.end(), ',') + 1;
+		int numberOfServers = region.Get("ips").ToObject().GetPropertyNames().Length();
 
-		regionNames[i] = region.Get("region").ToString().Utf8Value();
+		regionNames.push_back(region.Get("region").ToString().Utf8Value());
 		int avgRtt = 0;
 
 		for (int j = 0; j < numberOfServers; j++) {
@@ -187,7 +185,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		}
 
 		avgRtt = avgRtt / numberOfServers;
-		rtTimes[i] = avgRtt;
+		rtTimes.push_back(avgRtt);
 	}
 
 	std::vector< std::pair <int,std::string> > vect;
