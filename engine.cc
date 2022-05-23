@@ -11,6 +11,8 @@ Napi::Function handleDeviceChange;
 Napi::Function allocatorCallback;
 Napi::Function handleVolumeChange;
 
+bool aecDump = false;
+
 //JSON.stringify imported from the JavaScript engine
 //Will accept an Object and convert it to a string
 std::string json_stringify(Napi::Object input, Napi::Env env) {
@@ -26,7 +28,7 @@ std::string json_stringify(Napi::Object input, Napi::Env env) {
 void Initialize(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	if (info.Length() < 1) {
+	if (info.Length() != 1) {
 		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
 		return;
 	}
@@ -46,7 +48,7 @@ void Initialize(const Napi::CallbackInfo& info) {
 void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	if (info.Length() < 1) {
+	if (info.Length() != 1) {
 		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
 		return;
 	}
@@ -57,6 +59,7 @@ void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
 	}
 
 	Napi::Function voiceCallback = info[0].As<Napi::Function>();
+
 	handleVoiceActivity = voiceCallback;
 	return;
 }
@@ -68,7 +71,7 @@ void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
 void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	if (info.Length() < 1) {
+	if (info.Length() != 1) {
 		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
 		return;
 	}
@@ -79,6 +82,7 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 	}
 
 	Napi::Function deviceCallback = info[0].As<Napi::Function>();
+
 	handleDeviceChange = deviceCallback;
 	return;
 }
@@ -88,7 +92,7 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 void SetImageDataAllocator(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	if (info.Length() < 1) {
+	if (info.Length() != 1) {
 		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
 		return;
 	}
@@ -99,6 +103,7 @@ void SetImageDataAllocator(const Napi::CallbackInfo& info) {
 	}
 
 	Napi::Function allocator = info[0].As<Napi::Function>();
+
 	allocatorCallback = allocator;
 	return;
 }
@@ -107,7 +112,7 @@ void SetImageDataAllocator(const Napi::CallbackInfo& info) {
 void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	if (info.Length() < 1) {
+	if (info.Length() != 1) {
 		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
 		return;
 	}
@@ -118,7 +123,32 @@ void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
 	}
 
 	Napi::Function callback = info[0].As<Napi::Function>();
+
 	handleVolumeChange = callback;
+	return;
+}
+
+//This is an optional function; it's only called if we export it
+//It changes depending on the position of the Diagnostic
+//Audio Recording toggle in Discord's Voice & Video settings
+//While we don't plan to support this functionality,
+//one extra toggle is always useful for configuration
+void SetAecDump(const Napi::CallbackInfo& info) {
+        Napi::Env env = info.Env();
+
+        if (info.Length() != 1) {
+                Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
+                return;
+        }
+
+        if (!info[0].IsBoolean()) {
+                Napi::TypeError::New(env, "Wrong argument type, Boolean expected").ThrowAsJavaScriptException();
+                return;
+        }
+
+	Napi::Boolean enable = info[0].As<Napi::Boolean>();
+
+	aecDump = enable.Value();
 	return;
 }
 
@@ -131,7 +161,7 @@ void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
 void RankRtcRegions(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-	if (info.Length() < 2) {
+	if (info.Length() != 2) {
 		Napi::TypeError::New(env, "Wrong number of arguments, 2 expected").ThrowAsJavaScriptException();
 		return;
 	}
@@ -322,6 +352,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set("setDeviceChangeCallback", Napi::Function::New(env, SetDeviceChangeCallback));
 	exports.Set("setImageDataAllocator", Napi::Function::New(env, SetImageDataAllocator));
 	exports.Set("setVolumeChangeCallback", Napi::Function::New(env, SetVolumeChangeCallback));
+	exports.Set("setAecDump", Napi::Function::New(env, SetAecDump));
 	exports.Set("rankRtcRegions", Napi::Function::New(env, RankRtcRegions));
 	return exports;
 }
