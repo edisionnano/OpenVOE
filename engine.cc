@@ -2,6 +2,7 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <bits/stdc++.h>
+#include <poll.h>
 
 //We store all callbacks as global variables
 //so that we can access them from every function
@@ -18,28 +19,6 @@ std::string json_stringify(Napi::Object input, Napi::Env env) {
 	Napi::Value json_object = stringify.Call(json, { input });
 	std::string json_string = json_object.ToString().Utf8Value();
 	return json_string;
-}
-
-//Measures the RoundTrip Time to an ip
-//It does so by a creating a socket
-//and then connecting to this ip on port 80
-//the output is an integer and the unit is microseconds
-int roundtrip(std::string ip_str) {
-	const char* ip = ip_str.c_str();
-	struct tcp_info info;
-
-	struct sockaddr_in sin;
-	int sock = socket(AF_INET, SOCK_STREAM, 0);
-
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons(80);
-	inet_aton(ip, &sin.sin_addr);
-
-	connect(sock, (struct sockaddr *) &sin, sizeof(sin));
-	socklen_t tcp_info_length = sizeof info;
-	getsockopt(sock, SOL_TCP, TCP_INFO, &info, &tcp_info_length);
-	close(sock);
-	return info.tcpi_rtt;
 }
 
 //Called by index.js in order to start the main loop
@@ -144,6 +123,11 @@ void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
 }
 
 //Called sometimes in order to rank the WebRTC regions by latency
+//The way we handle this is by connecting once to each server
+//then measuring the roundtrip time of connect and averaging
+//them out to find the average rtt of each region
+//All IPs are pinged at once
+//Credits to @jsimmons for the multithreaded socket connect logic
 void RankRtcRegions(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
@@ -162,15 +146,133 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		return;
 	}
 
+        struct endpoint
+        {
+                std::string ip;
+                int fd = 0;
+                int rtt = -1;
+        };
+
 	Napi::Object regionsIps = info[0].As<Napi::Object>();
+
 	Napi::Function rankRtcRegionsCallback = info[1].As<Napi::Function>();
 
 	std::string propertyNames = regionsIps.GetPropertyNames().ToString().Utf8Value();
 
 	std::vector<int> rtTimes;
 	std::vector<std::string> regionNames;
+	std::vector< std::pair <int,std::string> > vect;
 
+	int counter = 0;
 	int numberOfRegions = regionsIps.GetPropertyNames().Length();
+	int numberOfTotalServers = 0;
+
+	Napi::Array rankedRegions = Napi::Array::New(env);
+
+	for (int i = 0; i < numberOfRegions; i++) {
+		numberOfTotalServers = numberOfTotalServers + regionsIps.Get(i).ToObject().Get("ips").ToObject().GetPropertyNames().Length();
+	}
+
+	endpoint endpoints[numberOfTotalServers];
+
+	for (int i = 0; i < numberOfRegions; i++) {
+		Napi::Object region = regionsIps.Get(i).ToObject();
+		int numberOfRegionServers = region.Get("ips").ToObject().GetPropertyNames().Length();
+		for (int j = 0; j < numberOfRegionServers; j++) {
+                        endpoints[counter].ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
+                        counter++;
+		}
+	}
+	counter = 0;
+
+	for (int i = 0; i < numberOfTotalServers; i++)
+	{
+		endpoints[i].fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+		if (endpoints[i].fd == -1)
+		{
+			perror("socket create");
+			return;
+		}
+
+		struct sockaddr_in sin;
+		sin.sin_family = AF_INET;
+		sin.sin_port = htons(80);
+		if (inet_aton(endpoints[i].ip.c_str(), &sin.sin_addr) == 0)
+		{
+			perror("inet aton");
+			return;
+		}
+
+		//If we succeeded first try without waiting then calculate the rtt
+		int ret = connect(endpoints[i].fd, (struct sockaddr *)&sin, sizeof(sin));
+		if (ret == 0)
+		{
+			struct tcp_info info;
+			socklen_t tcp_info_length = sizeof info;
+			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
+			close(endpoints[i].fd);
+			endpoints[i].rtt = info.tcpi_rtt;
+			endpoints[i].fd = -1;
+		}
+
+		if (errno != EINPROGRESS)
+		{
+			perror("connect");
+			endpoints[i].fd = -1;
+		}
+	}
+
+	for (int i = 0; i < numberOfTotalServers; i++)
+	{
+		if (endpoints[i].fd == -1)
+		{
+			continue;
+		}
+
+		//Wait for the socket connect to complete
+		{
+			struct pollfd pollfd;
+			pollfd.fd = endpoints[i].fd;
+			pollfd.events = POLLOUT;
+			int ret = poll(&pollfd, 1, -1);
+			if (ret < 0)
+			{
+				perror("poll");
+				endpoints[i].fd = -1;
+				continue;
+			}
+		}
+
+		//Check whether we succeeded in connecting, or errored out.
+		int ret;
+		socklen_t ret_len = sizeof(ret);
+		if (getsockopt(endpoints[i].fd, SOL_SOCKET, SO_ERROR, &ret, &ret_len) < 0)
+		{
+			perror("so_error");
+			endpoints[i].fd = -1;
+			continue;
+		}
+
+		//If we succeeded then calculate the rtt
+		if (ret == 0)
+		{
+			struct tcp_info info;
+			socklen_t tcp_info_length = sizeof info;
+			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
+			close(endpoints[i].fd);
+			endpoints[i].rtt = info.tcpi_rtt;
+			endpoints[i].fd = -1;
+			continue;
+		}
+
+		if (ret != EINPROGRESS)
+		{
+			fprintf(stderr, "socket error: %s\n", strerror(ret));
+			endpoints[i].fd = -1;
+			continue;
+		}
+	}
+
 	for (int i = 0; i < numberOfRegions; i++) {
 		Napi::Object region = regionsIps.Get(i).ToObject();
 		int numberOfServers = region.Get("ips").ToObject().GetPropertyNames().Length();
@@ -180,22 +282,19 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 		for (int j = 0; j < numberOfServers; j++) {
 			std::string ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
-			int rtt = roundtrip(ip);
-			avgRtt = avgRtt + rtt;
+			avgRtt = avgRtt + endpoints[counter].rtt;
+                        counter++;
 		}
 
 		avgRtt = avgRtt / numberOfServers;
 		rtTimes.push_back(avgRtt);
 	}
 
-	std::vector< std::pair <int,std::string> > vect;
 	for (int i=0; i<numberOfRegions; i++) {
 		vect.push_back( make_pair(rtTimes[i],regionNames[i]) );
 	}
 
 	std::sort(vect.begin(), vect.end());
-
-	Napi::Array rankedRegions = Napi::Array::New(env);
 
 	for (int i=0; i<numberOfRegions; i++) {
 		const auto& value = vect[i].second;
