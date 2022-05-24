@@ -200,7 +200,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 	Napi::Array rankedRegions = Napi::Array::New(env);
 
 	for (int i = 0; i < numberOfRegions; i++) {
-		numberOfTotalServers = numberOfTotalServers + regionsIps.Get(i).ToObject().Get("ips").ToObject().GetPropertyNames().Length();
+		numberOfTotalServers += regionsIps.Get(i).ToObject().Get("ips").ToObject().GetPropertyNames().Length();
 	}
 
 	endpoint endpoints[numberOfTotalServers];
@@ -312,7 +312,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 		for (int j = 0; j < numberOfServers; j++) {
 			std::string ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
-			avgRtt = avgRtt + endpoints[counter].rtt;
+			avgRtt += endpoints[counter].rtt;
                         counter++;
 		}
 
