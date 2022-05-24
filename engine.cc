@@ -224,7 +224,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 			return;
 		}
 
-		struct sockaddr_in sin;
+		sockaddr_in sin;
 		sin.sin_family = AF_INET;
 		sin.sin_port = htons(80);
 		if (inet_aton(endpoints[i].ip.c_str(), &sin.sin_addr) == 0)
@@ -234,10 +234,10 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		}
 
 		//If we succeeded first try without waiting then calculate the rtt
-		int ret = connect(endpoints[i].fd, (struct sockaddr *)&sin, sizeof(sin));
+		int ret = connect(endpoints[i].fd, (sockaddr *)&sin, sizeof(sin));
 		if (ret == 0)
 		{
-			struct tcp_info info;
+			tcp_info info;
 			socklen_t tcp_info_length = sizeof info;
 			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
 			close(endpoints[i].fd);
@@ -261,7 +261,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 		//Wait for the socket connect to complete
 		{
-			struct pollfd pollfd;
+			pollfd pollfd;
 			pollfd.fd = endpoints[i].fd;
 			pollfd.events = POLLOUT;
 			int ret = poll(&pollfd, 1, -1);
@@ -286,7 +286,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		//If we succeeded then calculate the rtt
 		if (ret == 0)
 		{
-			struct tcp_info info;
+			tcp_info info;
 			socklen_t tcp_info_length = sizeof info;
 			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
 			close(endpoints[i].fd);
