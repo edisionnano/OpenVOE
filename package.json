@@ -2,10 +2,15 @@
   "name": "openvoe",
   "version": "0.0.1",
   "description": "OpenVOE is an open source reimplementation of discord_voice.node",
+  "homepage": "https://github.com/edisionnano/OpenVOE",
+  "license": "GPL-2.0",
   "private": true,
-  "dependencies": {
-    "bindings": "~1.2.1",
-    "node-addon-api": "^1.0.0"
+  "scripts": {
+    "install": "cmake-js compile"
   },
-  "gypfile": true
+  "dependencies": {
+    "bindings": "~1.5.0",
+    "cmake-js": "^6.3.0",
+    "node-addon-api": "^5.0.0"
+  }
 }
