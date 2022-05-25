@@ -234,8 +234,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		}
 
 		//If we succeeded first try without waiting then calculate the rtt
-		int ret = connect(endpoints[i].fd, (sockaddr *)&sin, sizeof(sin));
-		if (ret == 0)
+		if (connect(endpoints[i].fd, reinterpret_cast<sockaddr *>(&sin), sizeof(sin) ) == 0)
 		{
 			tcp_info info;
 			socklen_t tcp_info_length = sizeof info;
@@ -264,8 +263,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 			pollfd pollfd;
 			pollfd.fd = endpoints[i].fd;
 			pollfd.events = POLLOUT;
-			int ret = poll(&pollfd, 1, -1);
-			if (ret < 0)
+			if (poll(&pollfd, 1, -1) < 0)
 			{
 				perror("poll");
 				endpoints[i].fd = -1;
