@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <bits/stdc++.h>
 #include <poll.h>
+#include "registry/registry.hpp"
 
 //We store all callbacks as global variables
 //so that we can access them from every function
@@ -41,7 +42,6 @@ void Initialize(const Napi::CallbackInfo& info) {
 	Napi::Object options = info[0].As<Napi::Object>();
 
 	std::cout << JsonStringify(options, env) << std::endl;
-	return;
 }
 
 //This callback doesn't appear to be utilized
@@ -61,7 +61,6 @@ void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
 	Napi::Function voiceCallback = info[0].As<Napi::Function>();
 
 	handleVoiceActivity = voiceCallback;
-	return;
 }
 
 //This function is provided with a callback
@@ -84,7 +83,40 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 	Napi::Function deviceCallback = info[0].As<Napi::Function>();
 
 	handleDeviceChange = deviceCallback;
-	return;
+}
+
+void getInputDevices(const Napi::CallbackInfo& info) {
+	Napi::Env env = info.Env();
+
+	if (info.Length() != 1) {
+		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
+		return;
+	}
+
+	if (!info[0].IsFunction()) {
+		Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
+		return;
+	}
+
+	Napi::Function deviceCallback = info[0].As<Napi::Function>();
+
+        auto mainLoop = pipewire::main_loop();
+        auto context = pipewire::context(mainLoop);
+        auto core = pipewire::core(context);
+        auto reg = pipewire::registry(core);
+
+        auto regListener = reg.listen<pipewire::registry_listener>();
+        regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
+                auto props = global.props;
+                auto mediaClass = props["media.class"];
+                auto nodeDescription = props["node.description"];
+
+                if (mediaClass == "Audio/Source") {
+                        std::cout << nodeDescription << " with node id: " << global.id << std::endl;
+                }
+        });
+
+        core.sync();
 }
 
 //Called by index.js, its purpose is to store
@@ -105,7 +137,6 @@ void SetImageDataAllocator(const Napi::CallbackInfo& info) {
 	Napi::Function allocator = info[0].As<Napi::Function>();
 
 	allocatorCallback = allocator;
-	return;
 }
 
 //Stubbed in the blob but Discord won't boot if we don't expose it
@@ -125,7 +156,6 @@ void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
 	Napi::Function callback = info[0].As<Napi::Function>();
 
 	handleVolumeChange = callback;
-	return;
 }
 
 //This is an optional function
@@ -133,15 +163,15 @@ void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
 void ConsoleLog(const Napi::CallbackInfo& info) {
 	Napi::Env env = info.Env();
 
-        if (info.Length() != 2) {
-                Napi::TypeError::New(env, "Wrong number of arguments, 2 expected").ThrowAsJavaScriptException();
-                return;
-        }
+	if (info.Length() != 2) {
+		Napi::TypeError::New(env, "Wrong number of arguments, 2 expected").ThrowAsJavaScriptException();
+		return;
+	}
 
-        if (!info[0].IsString() || !info[1].IsString()) {
-                Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
-                return;
-        }
+	if (!info[0].IsString() || !info[1].IsString()) {
+		Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
+		return;
+	}
 
 	Napi::String level = info[0].As<Napi::String>();
 
@@ -157,22 +187,21 @@ void ConsoleLog(const Napi::CallbackInfo& info) {
 //While we don't plan to support this functionality,
 //one extra toggle is always useful for configuration
 void SetAecDump(const Napi::CallbackInfo& info) {
-        Napi::Env env = info.Env();
+	Napi::Env env = info.Env();
 
-        if (info.Length() != 1) {
-                Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
-                return;
-        }
+	if (info.Length() != 1) {
+		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
+		return;
+	}
 
-        if (!info[0].IsBoolean()) {
-                Napi::TypeError::New(env, "Wrong argument type, Boolean expected").ThrowAsJavaScriptException();
-                return;
-        }
+	if (!info[0].IsBoolean()) {
+		Napi::TypeError::New(env, "Wrong argument type, Boolean expected").ThrowAsJavaScriptException();
+		return;
+	}
 
 	Napi::Boolean enable = info[0].As<Napi::Boolean>();
 
 	aecDump = enable.Value();
-	return;
 }
 
 //Called sometimes in order to rank the WebRTC regions by latency
@@ -199,16 +228,15 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		return;
 	}
 
-        Napi::Object regionsIps = info[0].As<Napi::Object>();
+	Napi::Object regionsIps = info[0].As<Napi::Object>();
 
-        Napi::Function rankRtcRegionsCallback = info[1].As<Napi::Function>();
+	Napi::Function rankRtcRegionsCallback = info[1].As<Napi::Function>();
 
-        struct endpoint
-        {
-                std::string ip;
-                int fd = 0;
-                int rtt = -1;
-        };
+	struct endpoint {
+		std::string ip;
+		int fd = 0;
+		int rtt = -1;
+	};
 
 	std::string propertyNames = regionsIps.GetPropertyNames().ToString().Utf8Value();
 
@@ -217,32 +245,30 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 	std::vector< std::pair <int,std::string> > vect;
 
 	int counter = 0;
-	int numberOfRegions = regionsIps.GetPropertyNames().Length();
-	int numberOfTotalServers = 0;
+	int regionCount = regionsIps.GetPropertyNames().Length();
+	int totalServerCount = 0;
 
 	Napi::Array rankedRegions = Napi::Array::New(env);
 
-	for (int i = 0; i < numberOfRegions; i++) {
-		numberOfTotalServers += regionsIps.Get(i).ToObject().Get("ips").ToObject().GetPropertyNames().Length();
+	for (int i = 0; i < regionCount; i++) {
+		totalServerCount += regionsIps.Get(i).ToObject().Get("ips").ToObject().GetPropertyNames().Length();
 	}
 
-	endpoint endpoints[numberOfTotalServers];
+	endpoint endpoints[totalServerCount];
 
-	for (int i = 0; i < numberOfRegions; i++) {
+	for (int i = 0; i < regionCount; i++) {
 		Napi::Object region = regionsIps.Get(i).ToObject();
-		int numberOfRegionServers = region.Get("ips").ToObject().GetPropertyNames().Length();
-		for (int j = 0; j < numberOfRegionServers; j++) {
-                        endpoints[counter].ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
-                        counter++;
+		int regionCountervers = region.Get("ips").ToObject().GetPropertyNames().Length();
+		for (int j = 0; j < regionCountervers; j++) {
+			endpoints[counter].ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
+			counter++;
 		}
 	}
 	counter = 0;
 
-	for (int i = 0; i < numberOfTotalServers; i++)
-	{
+	for (int i = 0; i < totalServerCount; i++) {
 		endpoints[i].fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-		if (endpoints[i].fd == -1)
-		{
+		if (endpoints[i].fd == -1) {
 			perror("socket create");
 			return;
 		}
@@ -250,15 +276,13 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		sockaddr_in sin;
 		sin.sin_family = AF_INET;
 		sin.sin_port = htons(80);
-		if (inet_aton(endpoints[i].ip.c_str(), &sin.sin_addr) == 0)
-		{
+		if (inet_aton(endpoints[i].ip.c_str(), &sin.sin_addr) == 0) {
 			perror("inet aton");
 			return;
 		}
 
 		//If we succeeded first try without waiting then calculate the rtt
-		if (connect(endpoints[i].fd, reinterpret_cast<sockaddr *>(&sin), sizeof(sin) ) == 0)
-		{
+		if (connect(endpoints[i].fd, reinterpret_cast<sockaddr *>(&sin), sizeof(sin) ) == 0) {
 			tcp_info info;
 			socklen_t tcp_info_length = sizeof info;
 			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
@@ -267,17 +291,14 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 			endpoints[i].fd = -1;
 		}
 
-		if (errno != EINPROGRESS)
-		{
+		if (errno != EINPROGRESS) {
 			perror("connect");
 			endpoints[i].fd = -1;
 		}
 	}
 
-	for (int i = 0; i < numberOfTotalServers; i++)
-	{
-		if (endpoints[i].fd == -1)
-		{
+	for (int i = 0; i < totalServerCount; i++) {
+		if (endpoints[i].fd == -1) {
 			continue;
 		}
 
@@ -286,8 +307,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 			pollfd pollfd;
 			pollfd.fd = endpoints[i].fd;
 			pollfd.events = POLLOUT;
-			if (poll(&pollfd, 1, -1) < 0)
-			{
+			if (poll(&pollfd, 1, -1) < 0) {
 				perror("poll");
 				endpoints[i].fd = -1;
 				continue;
@@ -297,16 +317,14 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		//Check whether we succeeded in connecting, or errored out.
 		int ret;
 		socklen_t ret_len = sizeof(ret);
-		if (getsockopt(endpoints[i].fd, SOL_SOCKET, SO_ERROR, &ret, &ret_len) < 0)
-		{
+		if (getsockopt(endpoints[i].fd, SOL_SOCKET, SO_ERROR, &ret, &ret_len) < 0) {
 			perror("so_error");
 			endpoints[i].fd = -1;
 			continue;
 		}
 
 		//If we succeeded then calculate the rtt
-		if (ret == 0)
-		{
+		if (ret == 0) {
 			tcp_info info;
 			socklen_t tcp_info_length = sizeof info;
 			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
@@ -316,44 +334,42 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 			continue;
 		}
 
-		if (ret != EINPROGRESS)
-		{
+		if (ret != EINPROGRESS) {
 			fprintf(stderr, "socket error: %s\n", strerror(ret));
 			endpoints[i].fd = -1;
 			continue;
 		}
 	}
 
-	for (int i = 0; i < numberOfRegions; i++) {
+	for (int i = 0; i < regionCount; i++) {
 		Napi::Object region = regionsIps.Get(i).ToObject();
-		int numberOfServers = region.Get("ips").ToObject().GetPropertyNames().Length();
+		int serverCount = region.Get("ips").ToObject().GetPropertyNames().Length();
 
 		regionNames.push_back(region.Get("region").ToString().Utf8Value());
 		int avgRtt = 0;
 
-		for (int j = 0; j < numberOfServers; j++) {
+		for (int j = 0; j < serverCount; j++) {
 			std::string ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
 			avgRtt += endpoints[counter].rtt;
-                        counter++;
+						counter++;
 		}
 
-		avgRtt = avgRtt / numberOfServers;
+		avgRtt = avgRtt / serverCount;
 		rtTimes.push_back(avgRtt);
 	}
 
-	for (int i=0; i<numberOfRegions; i++) {
+	for (int i=0; i<regionCount; i++) {
 		vect.push_back( make_pair(rtTimes[i],regionNames[i]) );
 	}
 
 	std::sort(vect.begin(), vect.end());
 
-	for (int i=0; i<numberOfRegions; i++) {
+	for (int i=0; i<regionCount; i++) {
 		const auto& value = vect[i].second;
 		rankedRegions[i] = value.c_str();
 	}
 
 	rankRtcRegionsCallback.Call(env.Global() ,{rankedRegions});
-	return;
 }
 
 //This handles the objects that are exported to node
