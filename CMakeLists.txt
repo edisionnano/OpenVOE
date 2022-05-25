@@ -25,4 +25,5 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${NODE_ADDON_API_DIR})
 # define NPI_VERSION
 add_definitions(-DNAPI_VERSION=3)
 
+target_compile_options(${PROJECT_NAME} PUBLIC -fPIC)
 target_link_libraries(${PROJECT_NAME} ${CMAKE_JS_LIB} PRIVATE rohrkabel)
