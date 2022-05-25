@@ -15,12 +15,12 @@ bool aecDump = false;
 
 //JSON.stringify imported from the JavaScript engine
 //Will accept an Object and convert it to a string
-std::string json_stringify(Napi::Object input, Napi::Env env) {
+std::string JsonStringify(Napi::Object input, Napi::Env env) {
 	Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
 	Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
-	Napi::Value json_object = stringify.Call(json, { input });
-	std::string json_string = json_object.ToString().Utf8Value();
-	return json_string;
+	Napi::Value jsonObject = stringify.Call(json, { input });
+	std::string jsonString = jsonObject.ToString().Utf8Value();
+	return jsonString;
 }
 
 //Called by index.js in order to start the main loop
@@ -40,7 +40,7 @@ void Initialize(const Napi::CallbackInfo& info) {
 
 	Napi::Object options = info[0].As<Napi::Object>();
 
-	std::cout << json_stringify(options, env) << std::endl;
+	std::cout << JsonStringify(options, env) << std::endl;
 	return;
 }
 
@@ -263,7 +263,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 			pollfd pollfd;
 			pollfd.fd = endpoints[i].fd;
 			pollfd.events = POLLOUT;
-			if (poll(&pollfd, 1, -1) < 0)
+			if (poll(&pollfd, 1, -1))
 			{
 				perror("poll");
 				endpoints[i].fd = -1;
