@@ -128,6 +128,29 @@ void SetVolumeChangeCallback(const Napi::CallbackInfo& info) {
 	return;
 }
 
+//This is an optional function
+//If we export it's called with the ouput of Chromium's Console
+void ConsoleLog(const Napi::CallbackInfo& info) {
+	Napi::Env env = info.Env();
+
+        if (info.Length() != 2) {
+                Napi::TypeError::New(env, "Wrong number of arguments, 2 expected").ThrowAsJavaScriptException();
+                return;
+        }
+
+        if (!info[0].IsString() || !info[1].IsString()) {
+                Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
+                return;
+        }
+
+	Napi::String level = info[0].As<Napi::String>();
+
+	Napi::String json = info[1].As<Napi::String>();
+
+	std::cout << level.Utf8Value() << ": " << json.Utf8Value() <<std::endl;
+	return;
+}
+
 //This is an optional function; it's only called if we export it
 //It changes depending on the position of the Diagnostic
 //Audio Recording toggle in Discord's Voice & Video settings
@@ -176,16 +199,16 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		return;
 	}
 
+        Napi::Object regionsIps = info[0].As<Napi::Object>();
+
+        Napi::Function rankRtcRegionsCallback = info[1].As<Napi::Function>();
+
         struct endpoint
         {
                 std::string ip;
                 int fd = 0;
                 int rtt = -1;
         };
-
-	Napi::Object regionsIps = info[0].As<Napi::Object>();
-
-	Napi::Function rankRtcRegionsCallback = info[1].As<Napi::Function>();
 
 	std::string propertyNames = regionsIps.GetPropertyNames().ToString().Utf8Value();
 
@@ -263,7 +286,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 			pollfd pollfd;
 			pollfd.fd = endpoints[i].fd;
 			pollfd.events = POLLOUT;
-			if (poll(&pollfd, 1, -1))
+			if (poll(&pollfd, 1, -1) < 0)
 			{
 				perror("poll");
 				endpoints[i].fd = -1;
@@ -350,6 +373,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set("setDeviceChangeCallback", Napi::Function::New(env, SetDeviceChangeCallback));
 	exports.Set("setImageDataAllocator", Napi::Function::New(env, SetImageDataAllocator));
 	exports.Set("setVolumeChangeCallback", Napi::Function::New(env, SetVolumeChangeCallback));
+	exports.Set("consoleLog", Napi::Function::New(env, ConsoleLog));
 	exports.Set("setAecDump", Napi::Function::New(env, SetAecDump));
 	exports.Set("rankRtcRegions", Napi::Function::New(env, RankRtcRegions));
 	return exports;
