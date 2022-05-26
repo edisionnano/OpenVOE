@@ -85,6 +85,55 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 	handleDeviceChange = deviceCallback;
 }
 
+void GetOutputDevices(const Napi::CallbackInfo& info) {
+	Napi::Env env{info.Env()};
+
+	if (info.Length() != 1) {
+		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
+		return;
+	}
+
+	if (!info[0].IsFunction()) {
+		Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
+		return;
+	}
+
+	Napi::Function deviceCallback{info[0].As<Napi::Function>()};
+
+	Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
+
+	auto mainLoop{pipewire::main_loop()};
+	auto context{pipewire::context(mainLoop)};
+	auto core{pipewire::core(context)};
+	auto reg{pipewire::registry(core)};
+
+	int audioOutputDeviceCount;
+
+	auto regListener{reg.listen<pipewire::registry_listener>()};
+	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
+		auto props{global.props};
+
+		if (props["media.class"] == "Audio/Sink" || props["media.class"] == "Audio/Duplex") {
+			std::string audioOutputDeviceName{props["node.description"]};
+
+			if(audioOutputDeviceName == "") {
+				audioOutputDeviceName = props["node.name"];
+			}
+
+			Napi::Object audioOutputDevice{Napi::Object::New(env)};
+			audioOutputDevice.Set("name", audioOutputDeviceName);
+			audioOutputDevice.Set("guid", "");
+			audioOutputDevice.Set("index", audioOutputDeviceCount);
+			audioOutputDevicesArray[audioOutputDeviceCount] = audioOutputDevice;
+			audioOutputDeviceCount++;
+		}
+	});
+
+	core.sync();
+
+	deviceCallback.Call(env.Global(), {audioOutputDevicesArray});
+}
+
 void GetInputDevices(const Napi::CallbackInfo& info) {
 	Napi::Env env{info.Env()};
 
@@ -113,7 +162,7 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
 		auto props{global.props};
 
-		if (props["media.class"] == "Audio/Source" || props["media.class"] == "Audio/Source/Virtual") {
+		if (props["media.class"] == "Audio/Source" || props["media.class"] == "Audio/Source/Virtual" || props["media.class"] == "Audio/Duplex") {
 			std::string audioInputDeviceName{props["node.description"]};
 
 			if(audioInputDeviceName == "") {
@@ -121,9 +170,9 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 			}
 
 			Napi::Object audioInputDevice{Napi::Object::New(env)};
-        		audioInputDevice.Set("name", audioInputDeviceName);
-        		audioInputDevice.Set("guid", "");
-        		audioInputDevice.Set("index", audioInputDeviceCount);
+			audioInputDevice.Set("name", audioInputDeviceName);
+			audioInputDevice.Set("guid", "");
+			audioInputDevice.Set("index", audioInputDeviceCount);
 			audioInputDevicesArray[audioInputDeviceCount] = audioInputDevice;
 			audioInputDeviceCount++;
 		}
@@ -132,6 +181,52 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 	core.sync();
 
 	deviceCallback.Call(env.Global(), {audioInputDevicesArray});
+}
+
+void GetVideoInputDevices(const Napi::CallbackInfo& info) {
+	Napi::Env env{info.Env()};
+
+	if (info.Length() != 1) {
+		Napi::TypeError::New(env, "Wrong number of arguments, 1 expected").ThrowAsJavaScriptException();
+		return;
+	}
+
+	if (!info[0].IsFunction()) {
+		Napi::TypeError::New(env, "Wrong argument type, Callback expected").ThrowAsJavaScriptException();
+		return;
+	}
+
+	Napi::Function deviceCallback{info[0].As<Napi::Function>()};
+
+	Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
+
+	auto mainLoop{pipewire::main_loop()};
+	auto context{pipewire::context(mainLoop)};
+	auto core{pipewire::core(context)};
+	auto reg{pipewire::registry(core)};
+
+	int videoInputDeviceCount;
+
+	auto regListener{reg.listen<pipewire::registry_listener>()};
+	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
+		auto props{global.props};
+
+		if (props["media.class"] == "Video/Source") {
+			std::string videoInputDeviceName{props["node.description"]};
+
+			Napi::Object videoInputDevice{Napi::Object::New(env)};
+			videoInputDevice.Set("name", videoInputDeviceName);
+			videoInputDevice.Set("guid", props["node.name"]);
+			videoInputDevice.Set("index", videoInputDeviceCount);
+			videoInputDevice.Set("facing", "unknown");
+			videoInputDevicesArray[videoInputDeviceCount] = videoInputDevice;
+			videoInputDeviceCount++;
+		}
+	});
+
+	core.sync();
+
+	deviceCallback.Call(env.Global(), {videoInputDevicesArray});
 }
 
 //Called by index.js, its purpose is to store
@@ -384,7 +479,9 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set("initialize", Napi::Function::New(env, Initialize));
 	exports.Set("setOnVoiceCallback", Napi::Function::New(env, SetOnVoiceCallback));
 	exports.Set("setDeviceChangeCallback", Napi::Function::New(env, SetDeviceChangeCallback));
+	exports.Set("getOutputDevices", Napi::Function::New(env, GetOutputDevices));
 	exports.Set("getInputDevices", Napi::Function::New(env, GetInputDevices));
+	exports.Set("getVideoInputDevices", Napi::Function::New(env, GetVideoInputDevices));
 	exports.Set("setImageDataAllocator", Napi::Function::New(env, SetImageDataAllocator));
 	exports.Set("setVolumeChangeCallback", Napi::Function::New(env, SetVolumeChangeCallback));
 	exports.Set("consoleLog", Napi::Function::New(env, ConsoleLog));
