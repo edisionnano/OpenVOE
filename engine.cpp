@@ -107,18 +107,25 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 	auto core{pipewire::core(context)};
 	auto reg{pipewire::registry(core)};
 
+	int audioInputDeviceCount;
+
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
 		auto props{global.props};
-		int counter;
 
-		if (props["media.class"] == "Audio/Source") {
+		if (props["media.class"] == "Audio/Source" || props["media.class"] == "Audio/Source/Virtual") {
+			std::string audioInputDeviceName{props["node.description"]};
+
+			if(audioInputDeviceName == "") {
+				audioInputDeviceName = props["node.name"];
+			}
+
 			Napi::Object audioInputDevice{Napi::Object::New(env)};
-        		audioInputDevice.Set("name", props["node.description"]);
+        		audioInputDevice.Set("name", audioInputDeviceName);
         		audioInputDevice.Set("guid", "");
-        		audioInputDevice.Set("index", counter);
-			audioInputDevicesArray[counter] = audioInputDevice;
-			counter++;
+        		audioInputDevice.Set("index", audioInputDeviceCount);
+			audioInputDevicesArray[audioInputDeviceCount] = audioInputDevice;
+			audioInputDeviceCount++;
 		}
 	});
 
