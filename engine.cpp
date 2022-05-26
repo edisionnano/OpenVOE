@@ -243,7 +243,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 		bool operator<(region& other) {return rttTime - other.rttTime > 0;}
 	};
-	
+
 	std::vector<region> regions(regionsIps.GetPropertyNames().Length());
 
 	Napi::Array rankedRegions{Napi::Array::New(env)};
