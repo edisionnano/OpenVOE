@@ -85,7 +85,7 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 	handleDeviceChange = deviceCallback;
 }
 
-void getInputDevices(const Napi::CallbackInfo& info) {
+void GetInputDevices(const Napi::CallbackInfo& info) {
 	Napi::Env env{info.Env()};
 
 	if (info.Length() != 1) {
@@ -100,23 +100,21 @@ void getInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Function deviceCallback{info[0].As<Napi::Function>()};
 
-        auto mainLoop{pipewire::main_loop()};
-        auto context{pipewire::context(mainLoop)};
-        auto core{pipewire::core(context)};
-        auto reg{pipewire::registry(core)};
+	auto mainLoop{pipewire::main_loop()};
+	auto context{pipewire::context(mainLoop)};
+	auto core{pipewire::core(context)};
+	auto reg{pipewire::registry(core)};
 
-        auto regListener{reg.listen<pipewire::registry_listener>()};
-        regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
-                auto props = global.props;
-                auto mediaClass = props["media.class"];
-                auto nodeDescription = props["node.description"];
+	auto regListener{reg.listen<pipewire::registry_listener>()};
+	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
+		auto props{global.props};
 
-                if (mediaClass == "Audio/Source") {
-                        std::cout << nodeDescription << " with node id: " << global.id << std::endl;
-                }
-        });
+		if (props["media.class"] == "Audio/Source") {
+			std::cout << props["node.description"] << " with node id: " << global.id << std::endl;
+		}
+	});
 
-        core.sync();
+	core.sync();
 }
 
 //Called by index.js, its purpose is to store
@@ -387,6 +385,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	exports.Set("initialize", Napi::Function::New(env, Initialize));
 	exports.Set("setOnVoiceCallback", Napi::Function::New(env, SetOnVoiceCallback));
 	exports.Set("setDeviceChangeCallback", Napi::Function::New(env, SetDeviceChangeCallback));
+	exports.Set("getInputDevices", Napi::Function::New(env, GetInputDevices));
 	exports.Set("setImageDataAllocator", Napi::Function::New(env, SetImageDataAllocator));
 	exports.Set("setVolumeChangeCallback", Napi::Function::New(env, SetVolumeChangeCallback));
 	exports.Set("consoleLog", Napi::Function::New(env, ConsoleLog));
