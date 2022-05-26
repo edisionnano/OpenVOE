@@ -236,135 +236,117 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 		int rtt{-1};
 	};
 
-	std::string propertyNames{regionsIps.GetPropertyNames().ToString().Utf8Value()};
+	struct region {
+		std::vector<endpoint> endpoints;
+		std::string name;
+		int rttTime;
 
-	std::vector<int> rtTimes;
-	std::vector<std::string> regionNames;
-	std::vector< std::pair <int,std::string> > vect;
-
-	int counter{0};
-	uint32_t regionCount{regionsIps.GetPropertyNames().Length()};
-	int totalServerCount{0};
+		bool operator<(region& other) {return rttTime - other.rttTime > 0;}
+	};
+	
+	std::vector<region> regions(regionsIps.GetPropertyNames().Length());
 
 	Napi::Array rankedRegions{Napi::Array::New(env)};
 
-	for (int i{0}; i < regionCount; i++) {
-		totalServerCount += regionsIps.Get(i).ToObject().Get("ips").ToObject().GetPropertyNames().Length();
-	}
+	for (int i{0}; i < regions.size(); i++) {
+		auto regionIps{regionsIps.Get(i).ToObject().Get("ips").ToObject()};
+		regions[i].name = regionsIps.Get(i).ToObject().Get("region").ToString().Utf8Value();
+		regions[i].endpoints.resize(regionIps.GetPropertyNames().Length());
+		for (int j{0}; j < regions[i].endpoints.size(); j++) {
+			regions[i].endpoints[j].ip = regionIps.Get(j).ToString().Utf8Value();
+			regions[i].endpoints[j].fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+			if (regions[i].endpoints[j].fd == -1) {
+				perror("socket create");
+				return;
+			}
 
-	endpoint endpoints[totalServerCount];
+			sockaddr_in sin;
+			sin.sin_family = AF_INET;
+			sin.sin_port = htons(80);
+			if (inet_aton(regions[i].endpoints[j].ip.c_str(), &sin.sin_addr) == 0) {
+				perror("inet aton");
+				return;
+			}
 
-	for (int i{0}; i < regionCount; i++) {
-		Napi::Object region{regionsIps.Get(i).ToObject()};
-		uint32_t regionServerCount{region.Get("ips").ToObject().GetPropertyNames().Length()};
-		for (int j{0}; j < regionServerCount; j++) {
-			endpoints[counter].ip = region.Get("ips").ToObject().Get(j).ToString().Utf8Value();
-			counter++;
-		}
-	}
-	counter = 0;
+			//If we succeeded first try without waiting then calculate the rtt
+			if (connect(regions[i].endpoints[j].fd, reinterpret_cast<sockaddr *>(&sin), sizeof(sin) ) == 0) {
+				tcp_info info;
+				socklen_t tcp_info_length{sizeof info};
+				getsockopt(regions[i].endpoints[j].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
+				close(regions[i].endpoints[j].fd);
+				regions[i].endpoints[j].rtt = info.tcpi_rtt;
+				regions[i].endpoints[j].fd = -1;
+			}
 
-	for (int i{0}; i < totalServerCount; i++) {
-		endpoints[i].fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-		if (endpoints[i].fd == -1) {
-			perror("socket create");
-			return;
-		}
+			if (errno != EINPROGRESS) {
+				perror("connect");
+				regions[i].endpoints[j].fd = -1;
+			}
 
-		sockaddr_in sin;
-		sin.sin_family = AF_INET;
-		sin.sin_port = htons(80);
-		if (inet_aton(endpoints[i].ip.c_str(), &sin.sin_addr) == 0) {
-			perror("inet aton");
-			return;
-		}
-
-		//If we succeeded first try without waiting then calculate the rtt
-		if (connect(endpoints[i].fd, reinterpret_cast<sockaddr *>(&sin), sizeof(sin) ) == 0) {
-			tcp_info info;
-			socklen_t tcp_info_length{sizeof info};
-			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
-			close(endpoints[i].fd);
-			endpoints[i].rtt = info.tcpi_rtt;
-			endpoints[i].fd = -1;
-		}
-
-		if (errno != EINPROGRESS) {
-			perror("connect");
-			endpoints[i].fd = -1;
 		}
 	}
 
-	for (int i{0}; i < totalServerCount; i++) {
-		if (endpoints[i].fd == -1) {
-			continue;
-		}
+	for (const auto current_region : regions) {
+		for(auto current_endpoint : current_region.endpoints) {
+			if (current_endpoint.fd == -1) {
+				continue;
+			}
 
-		//Wait for the socket connect to complete
-		{
-			pollfd pollfd;
-			pollfd.fd = endpoints[i].fd;
-			pollfd.events = POLLOUT;
-			if (poll(&pollfd, 1, -1) < 0) {
-				perror("poll");
-				endpoints[i].fd = -1;
+			//Wait for the socket connect to complete
+			{
+				pollfd pollfd;
+				pollfd.fd = current_endpoint.fd;
+				pollfd.events = POLLOUT;
+				if (poll(&pollfd, 1, -1) < 0) {
+					perror("poll");
+					current_endpoint.fd = -1;
+					continue;
+				}
+			}
+
+			//Check whether we succeeded in connecting, or errored out.
+			int ret;
+			socklen_t ret_len{sizeof(ret)};
+			if (getsockopt(current_endpoint.fd, SOL_SOCKET, SO_ERROR, &ret, &ret_len) < 0) {
+				perror("so_error");
+				current_endpoint.fd = -1;
+				continue;
+			}
+
+			//If we succeeded then calculate the rtt
+			if (ret == 0) {
+				tcp_info info;
+				socklen_t tcp_info_length{sizeof info};
+				getsockopt(current_endpoint.fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
+				close(current_endpoint.fd);
+				current_endpoint.rtt = info.tcpi_rtt;
+				current_endpoint.fd = -1;
+				continue;
+			}
+
+			if (ret != EINPROGRESS) {
+				fprintf(stderr, "socket error: %s\n", strerror(ret));
+				current_endpoint.fd = -1;
 				continue;
 			}
 		}
-
-		//Check whether we succeeded in connecting, or errored out.
-		int ret;
-		socklen_t ret_len{sizeof(ret)};
-		if (getsockopt(endpoints[i].fd, SOL_SOCKET, SO_ERROR, &ret, &ret_len) < 0) {
-			perror("so_error");
-			endpoints[i].fd = -1;
-			continue;
-		}
-
-		//If we succeeded then calculate the rtt
-		if (ret == 0) {
-			tcp_info info;
-			socklen_t tcp_info_length{sizeof info};
-			getsockopt(endpoints[i].fd, IPPROTO_TCP, TCP_INFO, &info, &tcp_info_length);
-			close(endpoints[i].fd);
-			endpoints[i].rtt = info.tcpi_rtt;
-			endpoints[i].fd = -1;
-			continue;
-		}
-
-		if (ret != EINPROGRESS) {
-			fprintf(stderr, "socket error: %s\n", strerror(ret));
-			endpoints[i].fd = -1;
-			continue;
-		}
 	}
 
-	for (int i{0}; i < regionCount; i++) {
-		Napi::Object region{regionsIps.Get(i).ToObject()};
-		uint32_t serverCount{region.Get("ips").ToObject().GetPropertyNames().Length()};
-
-		regionNames.push_back(region.Get("region").ToString().Utf8Value());
+	for (auto current_region : regions) {
 		int avgRtt{0};
 
-		for (int j{0}; j < serverCount; j++) {
-			std::string ip{region.Get("ips").ToObject().Get(j).ToString().Utf8Value()};
-			avgRtt += endpoints[counter].rtt;
-						counter++;
+		for (auto current_endpoint : current_region.endpoints) {
+			avgRtt += current_endpoint.rtt;
 		}
 
-		avgRtt = avgRtt / serverCount;
-		rtTimes.push_back(avgRtt);
+		current_region.rttTime = avgRtt / current_region.endpoints.size();
 	}
 
-	for (int i{0}; i<regionCount; i++) {
-		vect.push_back( make_pair(rtTimes[i],regionNames[i]) );
-	}
 
-	std::sort(vect.begin(), vect.end());
+	std::sort(regions.begin(), regions.end());
 
-	for (int i{0}; i<regionCount; i++) {
-		const auto& value{vect[i].second};
-		rankedRegions[i] = value.c_str();
+	for (int i = 0; i < regions.size(); i++) {
+		rankedRegions[i] = regions[i].name.c_str();
 	}
 
 	rankRtcRegionsCallback.Call(env.Global() ,{rankedRegions});
