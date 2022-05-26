@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 
+set(CMAKE_C_FLAGS " -fPIC")
+set(CMAKE_CXX_FLAGS " -fPIC")
+
 project (discord_voice)
 include_directories(${CMAKE_JS_INC})
 file(GLOB SOURCE_FILES "engine.cpp")
@@ -25,5 +28,4 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${NODE_ADDON_API_DIR})
 # define NPI_VERSION
 add_definitions(-DNAPI_VERSION=3)
 
-target_compile_options(${PROJECT_NAME} PUBLIC -fPIC)
 target_link_libraries(${PROJECT_NAME} ${CMAKE_JS_LIB} PRIVATE rohrkabel)
