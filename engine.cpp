@@ -100,6 +100,8 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Function deviceCallback{info[0].As<Napi::Function>()};
 
+	Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
+
 	auto mainLoop{pipewire::main_loop()};
 	auto context{pipewire::context(mainLoop)};
 	auto core{pipewire::core(context)};
@@ -108,13 +110,21 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
 		auto props{global.props};
+		int counter;
 
 		if (props["media.class"] == "Audio/Source") {
-			std::cout << props["node.description"] << " with node id: " << global.id << std::endl;
+			Napi::Object audioInputDevice{Napi::Object::New(env)};
+        		audioInputDevice.Set("name", props["node.description"]);
+        		audioInputDevice.Set("guid", "");
+        		audioInputDevice.Set("index", counter);
+			audioInputDevicesArray[counter] = audioInputDevice;
+			counter++;
 		}
 	});
 
 	core.sync();
+
+	deviceCallback.Call(env.Global(), {audioInputDevicesArray});
 }
 
 //Called by index.js, its purpose is to store
@@ -345,11 +355,11 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 	std::sort(regions.begin(), regions.end());
 
-	for (int i = 0; i < regions.size(); i++) {
+	for (int i{0}; i < regions.size(); i++) {
 		rankedRegions[i] = regions[i].name.c_str();
 	}
 
-	rankRtcRegionsCallback.Call(env.Global() ,{rankedRegions});
+	rankRtcRegionsCallback.Call(env.Global(), {rankedRegions});
 }
 
 //This handles the objects that are exported to node
@@ -357,7 +367,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 	//Construct the Degradation Preference Object
 	//This is basically our preference as to how bad connections are handled
 	//Do we care more about the resolution, the framerate, both or nothing?
-	Napi::Object DegradationPreference = Napi::Object::New(env);
+	Napi::Object DegradationPreference{Napi::Object::New(env)};
 	DegradationPreference.Set("MAINTAIN_RESOLUTION", 0);
 	DegradationPreference.Set("MAINTAIN_FRAMERATE", 1);
 	DegradationPreference.Set("BALANCED", 2);
