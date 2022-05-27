@@ -107,7 +107,7 @@ void GetOutputDevices(const Napi::CallbackInfo& info) {
 	auto core{pipewire::core(context)};
 	auto reg{pipewire::registry(core)};
 
-	int audioOutputDeviceCount;
+	int audioOutputDeviceCount{0};
 
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
@@ -156,7 +156,7 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 	auto core{pipewire::core(context)};
 	auto reg{pipewire::registry(core)};
 
-	int audioInputDeviceCount;
+	int audioInputDeviceCount{0};
 
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
@@ -205,7 +205,7 @@ void GetVideoInputDevices(const Napi::CallbackInfo& info) {
 	auto core{pipewire::core(context)};
 	auto reg{pipewire::registry(core)};
 
-	int videoInputDeviceCount;
+	int videoInputDeviceCount{0};
 
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
