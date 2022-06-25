@@ -107,7 +107,7 @@ void GetOutputDevices(const Napi::CallbackInfo& info) {
 	auto core{pipewire::core(context)};
 	auto reg{pipewire::registry(core)};
 
-	int audioOutputDeviceCount{0};
+	int audioOutputDeviceCount{};
 
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
@@ -156,7 +156,7 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 	auto core{pipewire::core(context)};
 	auto reg{pipewire::registry(core)};
 
-	int audioInputDeviceCount{0};
+	int audioInputDeviceCount{};
 
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
@@ -205,7 +205,7 @@ void GetVideoInputDevices(const Napi::CallbackInfo& info) {
 	auto core{pipewire::core(context)};
 	auto reg{pipewire::registry(core)};
 
-	int videoInputDeviceCount{0};
+	int videoInputDeviceCount{};
 
 	auto regListener{reg.listen<pipewire::registry_listener>()};
 	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
@@ -344,7 +344,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 	struct endpoint {
 		std::string ip;
-		int fd{0};
+		int fd{};
 		int rtt{-1};
 	};
 
@@ -360,11 +360,11 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 	Napi::Array rankedRegions{Napi::Array::New(env)};
 
-	for (int i{0}; i < regions.size(); i++) {
+	for (int i{}; i < regions.size(); i++) {
 		auto regionIps{regionsIps.Get(i).ToObject().Get("ips").ToObject()};
 		regions[i].name = regionsIps.Get(i).ToObject().Get("region").ToString().Utf8Value();
 		regions[i].endpoints.resize(regionIps.GetPropertyNames().Length());
-		for (int j{0}; j < regions[i].endpoints.size(); j++) {
+		for (int j{}; j < regions[i].endpoints.size(); j++) {
 			regions[i].endpoints[j].ip = regionIps.Get(j).ToString().Utf8Value();
 			regions[i].endpoints[j].fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 			if (regions[i].endpoints[j].fd == -1) {
@@ -445,7 +445,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 	}
 
 	for (auto current_region : regions) {
-		int avgRtt{0};
+		int avgRtt{};
 
 		for (auto current_endpoint : current_region.endpoints) {
 			avgRtt += current_endpoint.rtt;
@@ -457,7 +457,7 @@ void RankRtcRegions(const Napi::CallbackInfo& info) {
 
 	std::sort(regions.begin(), regions.end());
 
-	for (int i{0}; i < regions.size(); i++) {
+	for (int i{}; i < regions.size(); i++) {
 		rankedRegions[i] = regions[i].name.c_str();
 	}
 
