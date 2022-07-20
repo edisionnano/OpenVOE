@@ -1,3 +1,8 @@
+.clangd
+compile_commands.json
 package-lock.json
+_deps/
+.cache/
 build/
+CMakeFiles/
 node_modules/
