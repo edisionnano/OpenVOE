@@ -3,7 +3,7 @@
 #include <arpa/inet.h>
 #include <bits/stdc++.h>
 #include <poll.h>
-#include "registry/registry.hpp"
+#include <list_devices.h>
 
 //We store all callbacks as global variables
 //so that we can access them from every function
@@ -102,34 +102,15 @@ void GetOutputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
 
-	auto mainLoop{pipewire::main_loop()};
-	auto context{pipewire::context(mainLoop)};
-	auto core{pipewire::core(context)};
-	auto reg{pipewire::registry(core)};
+	std::vector<device> outputDevices = ListDevices(AUDIO_OUTPUT);
 
-	int audioOutputDeviceCount{};
-
-	auto regListener{reg.listen<pipewire::registry_listener>()};
-	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
-		auto props{global.props};
-
-		if (props["media.class"] == "Audio/Sink" || props["media.class"] == "Audio/Duplex") {
-			std::string audioOutputDeviceName{props["node.description"]};
-
-			if(audioOutputDeviceName == "") {
-				audioOutputDeviceName = props["node.name"];
-			}
-
+	for(int i{}; i < outputDevices.size(); i++) {
 			Napi::Object audioOutputDevice{Napi::Object::New(env)};
-			audioOutputDevice.Set("name", audioOutputDeviceName);
+			audioOutputDevice.Set("name", outputDevices[i].description);
 			audioOutputDevice.Set("guid", "");
-			audioOutputDevice.Set("index", audioOutputDeviceCount);
-			audioOutputDevicesArray[audioOutputDeviceCount] = audioOutputDevice;
-			audioOutputDeviceCount++;
-		}
-	});
-
-	core.sync();
+			audioOutputDevice.Set("index", i);
+			audioOutputDevicesArray[i] = audioOutputDevice;
+	}
 
 	deviceCallback.Call(env.Global(), {audioOutputDevicesArray});
 }
@@ -151,34 +132,15 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
 
-	auto mainLoop{pipewire::main_loop()};
-	auto context{pipewire::context(mainLoop)};
-	auto core{pipewire::core(context)};
-	auto reg{pipewire::registry(core)};
+	std::vector<device> inputDevices = ListDevices(AUDIO_INPUT);
 
-	int audioInputDeviceCount{};
-
-	auto regListener{reg.listen<pipewire::registry_listener>()};
-	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
-		auto props{global.props};
-
-		if (props["media.class"] == "Audio/Source" || props["media.class"] == "Audio/Source/Virtual" || props["media.class"] == "Audio/Duplex") {
-			std::string audioInputDeviceName{props["node.description"]};
-
-			if(audioInputDeviceName == "") {
-				audioInputDeviceName = props["node.name"];
-			}
-
+	for(int i{}; i < inputDevices.size(); i++) {
 			Napi::Object audioInputDevice{Napi::Object::New(env)};
-			audioInputDevice.Set("name", audioInputDeviceName);
+			audioInputDevice.Set("name", inputDevices[i].description);
 			audioInputDevice.Set("guid", "");
-			audioInputDevice.Set("index", audioInputDeviceCount);
-			audioInputDevicesArray[audioInputDeviceCount] = audioInputDevice;
-			audioInputDeviceCount++;
-		}
-	});
-
-	core.sync();
+			audioInputDevice.Set("index", i);
+			audioInputDevicesArray[i] = audioInputDevice;
+	}
 
 	deviceCallback.Call(env.Global(), {audioInputDevicesArray});
 }
@@ -200,31 +162,16 @@ void GetVideoInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
 
-	auto mainLoop{pipewire::main_loop()};
-	auto context{pipewire::context(mainLoop)};
-	auto core{pipewire::core(context)};
-	auto reg{pipewire::registry(core)};
+	std::vector<device> videoInputDevices = ListDevices(VIDEO_INPUT);
 
-	int videoInputDeviceCount{};
-
-	auto regListener{reg.listen<pipewire::registry_listener>()};
-	regListener.on<pipewire::registry_event::global>([&](const pipewire::global &global) {
-		auto props{global.props};
-
-		if (props["media.class"] == "Video/Source") {
-			std::string videoInputDeviceName{props["node.description"]};
-
-			Napi::Object videoInputDevice{Napi::Object::New(env)};
-			videoInputDevice.Set("name", videoInputDeviceName);
-			videoInputDevice.Set("guid", props["node.name"]);
-			videoInputDevice.Set("index", videoInputDeviceCount);
-			videoInputDevice.Set("facing", "unknown");
-			videoInputDevicesArray[videoInputDeviceCount] = videoInputDevice;
-			videoInputDeviceCount++;
-		}
-	});
-
-	core.sync();
+	for(int i{}; i < videoInputDevices.size(); i++) {
+		Napi::Object videoInputDevice{Napi::Object::New(env)};
+		videoInputDevice.Set("name", videoInputDevices[i].description);
+		videoInputDevice.Set("guid", videoInputDevices[i].name); 
+		videoInputDevice.Set("index", i);
+		videoInputDevice.Set("facing", "unknown");
+		videoInputDevicesArray[i] = videoInputDevice;
+	}
 
 	deviceCallback.Call(env.Global(), {videoInputDevicesArray});
 }
