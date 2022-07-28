@@ -3,12 +3,12 @@
 #include <arpa/inet.h>
 #include <bits/stdc++.h>
 #include <poll.h>
+#include <device_change.h>
 #include <list_devices.h>
 
 //We store all callbacks as global variables
 //so that we can access them from every function
 Napi::Function handleVoiceActivity;
-Napi::Function handleDeviceChange;
 Napi::Function allocatorCallback;
 Napi::Function handleVolumeChange;
 
@@ -82,7 +82,7 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 
 	Napi::Function deviceCallback{info[0].As<Napi::Function>()};
 
-	handleDeviceChange = deviceCallback;
+	DeviceChange(deviceCallback, env);
 }
 
 void GetOutputDevices(const Napi::CallbackInfo& info) {

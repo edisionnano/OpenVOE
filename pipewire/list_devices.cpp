@@ -34,7 +34,7 @@ static int Roundtrip(struct pw_core *core, struct pw_main_loop *loop)
 }
 
 void RegistryEventGlobal(void *data, uint32_t id,
-	uint32_t permissions, const char *type, uint32_t version,
+		uint32_t permissions, const char *type, uint32_t version,
 		const struct spa_dict *props)
 {
 	const char *media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
@@ -89,7 +89,7 @@ std::vector<device> ListDevices(int deviceType)
 
 		spa_zero(registry_listener);
 		pw_registry_add_listener(registry, &registry_listener,
-								&registry_events, &deviceType);
+								&registry_events_list, &deviceType);
 
 		Roundtrip(core, loop);
 
