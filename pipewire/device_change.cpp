@@ -1,100 +1,59 @@
-#include <napi.h>
-#include <pipewire/pipewire.h>
-#include <string>
-#include <vector>
 #include "device_change.h"
+
+using std::string;
 
 std::vector<device_with_id> audioInputDevices{};
 std::vector<device_with_id> audioOutputDevices{};
 std::vector<device_with_id> videoInputDevices{};
 
-void ExecuteCallback(callback c)
-{
-	Napi::Function handleDeviceChange = c.handleDeviceChange;
-	Napi::Env env = c.env;
-
-	Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
-	Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
-	Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
-
-	for(int i{}; i < audioInputDevices.size(); i++) {
-		Napi::Object audioInputDevice{Napi::Object::New(env)};
-		audioInputDevice.Set("name", audioInputDevices[i].description);
-		audioInputDevice.Set("guid", "");
-		audioInputDevice.Set("index", i);
-		audioInputDevicesArray[i] = audioInputDevice;
-	}
-
-	for(int i{}; i < audioOutputDevices.size(); i++) {
-		Napi::Object audioOutputDevice{Napi::Object::New(env)};
-		audioOutputDevice.Set("name", audioOutputDevices[i].description);
-		audioOutputDevice.Set("guid", "");
-		audioOutputDevice.Set("index", i);
-		audioOutputDevicesArray[i] = audioOutputDevice;
-	}
-
-	for(int i{}; i < videoInputDevices.size(); i++) {
-		Napi::Object videoInputDevice{Napi::Object::New(env)};
-		videoInputDevice.Set("name", videoInputDevices[i].description);
-		videoInputDevice.Set("guid", videoInputDevices[i].name);
-		videoInputDevice.Set("index", i);
-		videoInputDevice.Set("facing", "unknown");
-		videoInputDevicesArray[i] = videoInputDevice;
-	}
-
-	handleDeviceChange.Call(env.Global(), {audioInputDevicesArray, audioOutputDevicesArray, videoInputDevicesArray});
-}
-
 static void registry_event_global(void *data, uint32_t id,
 	uint32_t permissions, const char *type, uint32_t version,
 					const struct spa_dict *props)
 {
-	callback c = *( (callback*) data);
+	callback_executor ce = *static_cast<callback_executor*>(data);
 
-	const char *media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
-	const char *node_description = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
-	const char *node_name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
+	const char* temp;
+	const string media_class = (temp = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS)) ? string{temp} : "";
+	const string node_description = (temp = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION)) ? string{temp} : "";
+	const string node_name = (temp = spa_dict_lookup(props, PW_KEY_NODE_NAME)) ? string{temp} : "";
 
-	if (media_class != NULL && (strcmp(media_class, "Audio/Source") == 0 || strcmp(media_class, "Audio/Source/Virtual") == 0 || strcmp(media_class, "Audio/Duplex") == 0)) {
+	if (media_class == "Audio/Source" || media_class == "Audio/Source/Virtual" || media_class == "Audio/Duplex") {
 		audioInputDevices.push_back({node_description, node_name, id});
-		ExecuteCallback(c);
-	} else if (media_class != NULL && (strcmp(media_class, "Audio/Sink") == 0 || strcmp(media_class, "Audio/Duplex") == 0)) {
+		(*(ce.executor))(ce.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
+	}
+	if (media_class == "Audio/Sink" || media_class == "Audio/Duplex") {
 		audioOutputDevices.push_back({node_description, node_name, id});
-		ExecuteCallback(c);
-	} else if (media_class != NULL && (strcmp(media_class, "Video/Source") == 0)) {
+		(*(ce.executor))(ce.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
+	}
+	if (media_class == "Video/Source") {
 		videoInputDevices.push_back({node_description, node_name, id});
-		ExecuteCallback(c);
+		(*(ce.executor))(ce.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
 	}
 }
 
 static void registry_event_global_remove(void *data, uint32_t id)
 {
-	callback c = *( (callback*) data);
+	callback_executor cb = *static_cast<callback_executor*>(data);
+	auto pred = [id] (device_with_id device) {return device.id == id;};
 
-	for(std::vector<device_with_id>::size_type i{}; i < audioInputDevices.size(); i++) {
-		if (id == audioInputDevices[i].id) {
-			audioInputDevices.erase(audioInputDevices.begin()+i);
-			ExecuteCallback(c);
-			break;
-		}
+	if(std::erase_if(audioInputDevices, pred) > 0) {
+		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
 	}
-	for(std::vector<device_with_id>::size_type i{}; i < audioOutputDevices.size(); i++) {
-			if (id == audioOutputDevices[i].id) {
-			audioOutputDevices.erase(audioOutputDevices.begin()+i);
-			ExecuteCallback(c);
-			break;
-		}
+	if(std::erase_if(audioOutputDevices, pred) > 0) {
+		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
 	}
-	for(std::vector<device_with_id>::size_type i{}; i < videoInputDevices.size(); i++) {
-			if (id == videoInputDevices[i].id) {
-			videoInputDevices.erase(videoInputDevices.begin()+i);
-			ExecuteCallback(c);
-			break;
-		}
+	if(std::erase_if(videoInputDevices, pred) > 0) {
+		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
 	}
 }
 
-int DeviceChange(Napi::Function handleDeviceChange, Napi::Env env)
+static const struct pw_registry_events registry_events_change = {
+	.version = PW_VERSION_REGISTRY_EVENTS,
+	.global = registry_event_global,
+	.global_remove = registry_event_global_remove
+};
+
+int DeviceChange(callback_executor ce)
 {
 	struct pw_main_loop *loop;
 	struct pw_context *context;
@@ -102,7 +61,6 @@ int DeviceChange(Napi::Function handleDeviceChange, Napi::Env env)
 	struct pw_registry *registry;
 	struct spa_hook registry_listener;
 
-	callback c{handleDeviceChange, env};
 
 	pw_init(NULL, NULL);
 
@@ -120,7 +78,7 @@ int DeviceChange(Napi::Function handleDeviceChange, Napi::Env env)
 
 	spa_zero(registry_listener);
 	pw_registry_add_listener(registry, &registry_listener,
-				&registry_events_change, &c);
+				&registry_events_change, &ce);
 
 	pw_main_loop_run(loop);
 

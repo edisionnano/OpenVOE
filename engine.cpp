@@ -63,6 +63,50 @@ void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
 	handleVoiceActivity = voiceCallback;
 }
 
+struct callback {
+	Napi::Function handleDeviceChange;
+	Napi::Env env;
+};
+
+void ExecuteCallback(void* data, std::vector<device_with_id>& audioInputDevices, std::vector<device_with_id>& audioOutputDevices, std::vector<device_with_id>& videoInputDevices)
+{
+	callback cb = *static_cast<callback*>(data);
+	Napi::Function handleDeviceChange = cb.handleDeviceChange;
+	Napi::Env env = cb.env;
+
+	Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
+	Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
+	Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
+
+	for(int i{}; i < audioInputDevices.size(); i++) {
+		Napi::Object audioInputDevice{Napi::Object::New(env)};
+		audioInputDevice.Set("name", audioInputDevices[i].description);
+		audioInputDevice.Set("guid", "");
+		audioInputDevice.Set("index", i);
+		audioInputDevicesArray[i] = audioInputDevice;
+	}
+
+	for(int i{}; i < audioOutputDevices.size(); i++) {
+		Napi::Object audioOutputDevice{Napi::Object::New(env)};
+		audioOutputDevice.Set("name", audioOutputDevices[i].description);
+		audioOutputDevice.Set("guid", "");
+		audioOutputDevice.Set("index", i);
+		audioOutputDevicesArray[i] = audioOutputDevice;
+	}
+
+	for(int i{}; i < videoInputDevices.size(); i++) {
+		Napi::Object videoInputDevice{Napi::Object::New(env)};
+		videoInputDevice.Set("name", videoInputDevices[i].description);
+		videoInputDevice.Set("guid", videoInputDevices[i].name);
+		videoInputDevice.Set("index", i);
+		videoInputDevice.Set("facing", "unknown");
+		videoInputDevicesArray[i] = videoInputDevice;
+	}
+
+	handleDeviceChange.Call(env.Global(), {audioInputDevicesArray, audioOutputDevicesArray, videoInputDevicesArray});
+}
+
+
 //This function is provided with a callback
 //that we call each time there's a change
 //to the audio input, video input and audio output devices
@@ -81,8 +125,10 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 	}
 
 	Napi::Function deviceCallback{info[0].As<Napi::Function>()};
+	callback cb{deviceCallback, env};
+	callback_executor ce{ExecuteCallback, &cb};
 
-	DeviceChange(deviceCallback, env);
+	DeviceChange(ce);
 }
 
 void GetOutputDevices(const Napi::CallbackInfo& info) {
@@ -102,7 +148,7 @@ void GetOutputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
 
-	std::vector<device> outputDevices = ListDevices(AUDIO_OUTPUT);
+	std::vector<device> outputDevices = ListDevices(deviceType::audio_output);
 
 	for(int i{}; i < outputDevices.size(); i++) {
 			Napi::Object audioOutputDevice{Napi::Object::New(env)};
@@ -132,7 +178,7 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
 
-	std::vector<device> inputDevices = ListDevices(AUDIO_INPUT);
+	std::vector<device> inputDevices = ListDevices(deviceType::audio_input);
 
 	for(int i{}; i < inputDevices.size(); i++) {
 			Napi::Object audioInputDevice{Napi::Object::New(env)};
@@ -162,7 +208,7 @@ void GetVideoInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
 
-	std::vector<device> videoInputDevices = ListDevices(VIDEO_INPUT);
+	std::vector<device> videoInputDevices = ListDevices(deviceType::video_input);
 
 	for(int i{}; i < videoInputDevices.size(); i++) {
 		Napi::Object videoInputDevice{Napi::Object::New(env)};

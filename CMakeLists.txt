@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_C_STANDARD_REQUIRED True)
+
 project (discord_voice)
 include_directories(${CMAKE_JS_INC})
 add_library(${PROJECT_NAME} SHARED "engine.cpp" ${CMAKE_JS_SRC})

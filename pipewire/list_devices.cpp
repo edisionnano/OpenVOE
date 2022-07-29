@@ -1,7 +1,6 @@
-#include <pipewire/pipewire.h>
-#include <string>
-#include <vector>
 #include "list_devices.h"
+
+using std::string;
 
 std::vector<device> devices{};
 
@@ -16,7 +15,7 @@ static void OnCoreDone(void *data, uint32_t id, int seq)
 static int Roundtrip(struct pw_core *core, struct pw_main_loop *loop)
 {
 	static const struct pw_core_events core_events = {
-		PW_VERSION_CORE_EVENTS,
+		.version = PW_VERSION_CORE_EVENTS,
 		.done = OnCoreDone,
 	};
 	struct roundtrip_data d = { .loop = loop };
@@ -37,33 +36,39 @@ void RegistryEventGlobal(void *data, uint32_t id,
 		uint32_t permissions, const char *type, uint32_t version,
 		const struct spa_dict *props)
 {
-	const char *media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
-	const char *node_description = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
-	const char *node_name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
+	const char* temp;
+	const string media_class = (temp = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS)) ? string{temp} : "";
+	const string node_description = (temp = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION)) ? string{temp} : "";
+	const string node_name = (temp = spa_dict_lookup(props, PW_KEY_NODE_NAME)) ? string{temp} : "";
 
 
-	int deviceType = *( (int*) data);
+	deviceType device_type = *(static_cast<deviceType*>(data));
 
-	switch(deviceType) {
-	case AUDIO_INPUT:
-		if (media_class != NULL && (strcmp(media_class, "Audio/Source") == 0 || strcmp(media_class, "Audio/Source/Virtual") == 0 || strcmp(media_class, "Audio/Duplex") == 0)) {
+	switch(device_type) {
+		case deviceType::audio_input:
+		if (media_class == "Audio/Source" || media_class == "Audio/Source/Virtual" || media_class == "Audio/Duplex") {
 				devices.push_back({node_description, node_name});
 		}
 		break;
-	case AUDIO_OUTPUT:
-		if (media_class != NULL && (strcmp(media_class, "Audio/Sink") == 0 || strcmp(media_class, "Audio/Duplex") == 0)) {
+		case deviceType::audio_output:
+		if (media_class == "Audio/Sink" || media_class == "Audio/Duplex") {
 				devices.push_back({node_description, node_name});
 		}
 		break;
-	case VIDEO_INPUT:
-		if (media_class != NULL && (strcmp(media_class, "Video/Source") == 0)) {
+		case deviceType::video_input:
+		if (media_class == "Video/Source") {
 				devices.push_back({node_description, node_name});
 		}
 		break;
 	}
 }
 
-std::vector<device> ListDevices(int deviceType)
+static const struct pw_registry_events registry_events_list = {
+		.version = PW_VERSION_REGISTRY_EVENTS,
+		.global = RegistryEventGlobal,
+};
+
+std::vector<device> ListDevices(deviceType device_type)
 {
 		struct pw_main_loop *loop;
 		struct pw_context *context;
@@ -89,7 +94,7 @@ std::vector<device> ListDevices(int deviceType)
 
 		spa_zero(registry_listener);
 		pw_registry_add_listener(registry, &registry_listener,
-								&registry_events_list, &deviceType);
+								&registry_events_list, &device_type);
 
 		Roundtrip(core, loop);
 

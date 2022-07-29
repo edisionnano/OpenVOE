@@ -1,11 +1,9 @@
 #pragma once
 
-#include <pipewire/pipewire.h>
+#include <string>
+#include <vector>
 
-struct callback {
-	Napi::Function handleDeviceChange;
-	Napi::Env env;
-};
+#include <pipewire/pipewire.h>
 
 struct device_with_id {
 	std::string description;
@@ -13,16 +11,9 @@ struct device_with_id {
 	uint32_t id;
 };
 
-static void registry_event_global(void *data, uint32_t id,
-		uint32_t permissions, const char *type, uint32_t version,
-		const struct spa_dict *props);
-
-static void registry_event_global_remove(void *data, uint32_t id);
-
-static const struct pw_registry_events registry_events_change = {
-	PW_VERSION_REGISTRY_EVENTS,
-	.global = registry_event_global,
-	.global_remove = registry_event_global_remove
+struct callback_executor {
+	void (*executor)(void*, std::vector<device_with_id>&, std::vector<device_with_id>&, std::vector<device_with_id>&);
+	void* callback;
 };
 
-int DeviceChange(Napi::Function handleDeviceChange, Napi::Env env);
+int DeviceChange(callback_executor ce);
