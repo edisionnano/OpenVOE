@@ -17,13 +17,18 @@ static void registry_event_global(void *data, uint32_t id,
 	const string node_description = (temp = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION)) ? string{temp} : "";
 	const string node_name = (temp = spa_dict_lookup(props, PW_KEY_NODE_NAME)) ? string{temp} : "";
 
-	bool audioInputDevicesRemoved = std::erase_if(audioInputDevices, pred) > 0;
-	bool audioOutputDevicesRemoved = std::erase_if(audioOutputDevices, pred) > 0;
-	bool videoInputDevicesRemoved = std::erase_if(videoInputDevices, pred) > 0;
-
-	if(audioInputDevicesRemoved || audioOutputDevicesRemoved || videoInputDevicesRemoved) {
-		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
-    }
+	if (media_class == "Audio/Source" || media_class == "Audio/Source/Virtual" || media_class == "Audio/Duplex") {
+		audioInputDevices.push_back({node_description, node_name, id});
+		(*(ce.executor))(ce.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
+	}
+	if (media_class == "Audio/Sink" || media_class == "Audio/Duplex") {
+		audioOutputDevices.push_back({node_description, node_name, id});
+		(*(ce.executor))(ce.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
+	}
+	if (media_class == "Video/Source") {
+		videoInputDevices.push_back({node_description, node_name, id});
+		(*(ce.executor))(ce.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
+	}
 }
 
 static void registry_event_global_remove(void *data, uint32_t id)
