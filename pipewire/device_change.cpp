@@ -36,13 +36,11 @@ static void registry_event_global_remove(void *data, uint32_t id)
 	callback_executor cb = *static_cast<callback_executor*>(data);
 	auto pred = [id] (device_with_id device) {return device.id == id;};
 
-	if(std::erase_if(audioInputDevices, pred) > 0) {
-		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
-	}
-	if(std::erase_if(audioOutputDevices, pred) > 0) {
-		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
-	}
-	if(std::erase_if(videoInputDevices, pred) > 0) {
+	bool audioInputDevicesRemoved = std::erase_if(audioInputDevices, pred) > 0;
+	bool audioOutputDevicesRemoved = std::erase_if(audioOutputDevices, pred) > 0;
+	bool videoInputDevicesRemoved = std::erase_if(videoInputDevices, pred) > 0;
+
+	if(audioInputDevicesRemoved || audioOutputDevicesRemoved || videoInputDevicesRemoved) {
 		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
 	}
 }
