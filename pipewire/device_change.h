@@ -1,20 +1,20 @@
 #pragma once
 
+#include <list>
 #include <string>
 #include <vector>
-#include <list>
 
 #include <pipewire/pipewire.h>
 
 struct device_with_id {
-	std::string description;
-	std::string name;
-	uint32_t id;
+  std::string description;
+  std::string name;
+  uint32_t id;
 };
 
 struct callback_executor {
-	void (*executor)(void*);
-	void* callback;
+  void (*executor)(void*);
+  void* callback;
 };
 
 int DeviceChange();
