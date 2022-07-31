@@ -6,3 +6,4 @@ _deps/
 build/
 CMakeFiles/
 node_modules/
+*.save

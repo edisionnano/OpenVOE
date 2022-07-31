@@ -1,53 +1,68 @@
 #include "device_change.h"
 
-using std::string;
+#include <atomic>
+#include <mutex>
 
-std::vector<device_with_id> audioInputDevices{};
-std::vector<device_with_id> audioOutputDevices{};
-std::vector<device_with_id> videoInputDevices{};
+std::list<device_with_id> audioInputDevices{};
+std::list<device_with_id> audioOutputDevices{};
+std::list<device_with_id> videoInputDevices{};
+std::mutex devices_mutex{};
 
-static void registry_event_global(void *data, uint32_t id,
+std::atomic<callback_executor*> current_executor{nullptr};
+
+static void registry_event_global(void *, uint32_t id,
 	uint32_t permissions, const char *type, uint32_t version,
 					const struct spa_dict *props)
 {
-	callback_executor ce = *static_cast<callback_executor*>(data);
-
+	callback_executor* ce = current_executor.load(std::memory_order_acquire);
 	const char* temp;
-	const string media_class = (temp = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS)) ? string{temp} : "";
-	const string node_description = (temp = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION)) ? string{temp} : "";
-	const string node_name = (temp = spa_dict_lookup(props, PW_KEY_NODE_NAME)) ? string{temp} : "";
+	const std::string media_class = (temp = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS)) ? std::string{temp} : "";
+	const std::string node_description = (temp = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION)) ? std::string{temp} : "";
+	const std::string node_name = (temp = spa_dict_lookup(props, PW_KEY_NODE_NAME)) ? std::string{temp} : "";
 
 	bool deviceAdded{};
+	{
+		std::scoped_lock lock{devices_mutex};
+		if (media_class == "Audio/Source" || media_class == "Audio/Source/Virtual" || media_class == "Audio/Duplex") {
+			audioInputDevices.push_back({node_description, node_name, id});
+			deviceAdded = true;
+		}
+		if (media_class == "Audio/Sink" || media_class == "Audio/Duplex") {
+			audioOutputDevices.push_back({node_description, node_name, id});
+			deviceAdded = true;
+		}
+		if (media_class == "Video/Source") {
+			videoInputDevices.push_back({node_description, node_name, id});
+			deviceAdded = true;
+		}
+	}
 
-	if (media_class == "Audio/Source" || media_class == "Audio/Source/Virtual" || media_class == "Audio/Duplex") {
-		audioInputDevices.push_back({node_description, node_name, id});
-		deviceAdded = true;
-	}
-	if (media_class == "Audio/Sink" || media_class == "Audio/Duplex") {
-		audioOutputDevices.push_back({node_description, node_name, id});
-		deviceAdded = true;
-	}
-	if (media_class == "Video/Source") {
-		videoInputDevices.push_back({node_description, node_name, id});
-		deviceAdded = true;
-	}
-
-	if (deviceAdded) {
-		(*(ce.executor))(ce.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
+	if (deviceAdded && ce) {
+		(*(ce->executor))(ce->callback);
 	}
 }
 
 static void registry_event_global_remove(void *data, uint32_t id)
 {
-	callback_executor cb = *static_cast<callback_executor*>(data);
-	auto pred = [id] (device_with_id device) {return device.id == id;};
+	callback_executor* ce = current_executor.load(std::memory_order_acquire);
+	bool deviceRemoved{};
+	{
+		std::scoped_lock lock{devices_mutex};
+		auto pred = [id, &deviceRemoved] (device_with_id device) {
+			if(device.id == id) {
+				deviceRemoved = true;
+				return true;
+			} else {
+				return false;
+			}
+		};
 
-	bool audioInputDevicesRemoved = std::erase_if(audioInputDevices, pred) > 0;
-	bool audioOutputDevicesRemoved = std::erase_if(audioOutputDevices, pred) > 0;
-	bool videoInputDevicesRemoved = std::erase_if(videoInputDevices, pred) > 0;
-
-	if(audioInputDevicesRemoved || audioOutputDevicesRemoved || videoInputDevicesRemoved) {
-		(*(cb.executor))(cb.callback, audioInputDevices, audioOutputDevices, videoInputDevices);
+		std::erase_if(audioInputDevices, pred);
+		std::erase_if(audioOutputDevices, pred);
+		std::erase_if(videoInputDevices, pred);
+	}
+	if(deviceRemoved && ce) {
+		(*(ce->executor))(ce->callback);
 	}
 }
 
@@ -57,7 +72,7 @@ static const struct pw_registry_events registry_events_change = {
 	.global_remove = registry_event_global_remove
 };
 
-int DeviceChange(callback_executor ce)
+int DeviceChange()
 {
 	struct pw_main_loop *loop;
 	struct pw_context *context;
@@ -82,7 +97,7 @@ int DeviceChange(callback_executor ce)
 
 	spa_zero(registry_listener);
 	pw_registry_add_listener(registry, &registry_listener,
-				&registry_events_change, &ce);
+				&registry_events_change, nullptr);
 
 	pw_main_loop_run(loop);
 
@@ -92,4 +107,28 @@ int DeviceChange(callback_executor ce)
 	pw_main_loop_destroy(loop);
 
 	return 0;
+}
+
+void SetExecutor(callback_executor* new_executor) {
+	current_executor.store(new_executor, std::memory_order_release);
+}
+
+callback_executor* GetExecutor() {
+	return current_executor.load(std::memory_order_acquire);
+}
+
+
+std::list<device_with_id> GetAudioInputDevices() {
+	std::scoped_lock lock{devices_mutex};
+	return std::list<device_with_id>{audioInputDevices};
+}
+
+std::list<device_with_id> GetAudioOutputDevices() {
+	std::scoped_lock lock{devices_mutex};
+	return std::list<device_with_id>{audioOutputDevices};
+}
+
+std::list<device_with_id> GetVideoDevices() {
+	std::scoped_lock lock{devices_mutex};
+	return std::list<device_with_id>{videoInputDevices};
 }

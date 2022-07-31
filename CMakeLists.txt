@@ -20,6 +20,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${NODE_ADDON_API_DIR})
 add_subdirectory("./pipewire")
 
 # define NPI_VERSION
-add_definitions(-DNAPI_VERSION=3)
+add_definitions(-DNAPI_VERSION=4)
 
 target_link_libraries(${PROJECT_NAME} ${CMAKE_JS_LIB} PRIVATE discord_voice_pipewire)

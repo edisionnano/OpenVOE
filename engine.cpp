@@ -4,13 +4,17 @@
 #include <bits/stdc++.h>
 #include <poll.h>
 #include <device_change.h>
-#include <list_devices.h>
+
+std::thread pipewireThread;
+Napi::ThreadSafeFunction tsfn;
 
 //We store all callbacks as global variables
 //so that we can access them from every function
 Napi::Function handleVoiceActivity;
 Napi::Function allocatorCallback;
 Napi::Function handleVolumeChange;
+
+callback_executor executor;
 
 bool aecDump{false};
 
@@ -42,6 +46,8 @@ void Initialize(const Napi::CallbackInfo& info) {
 	Napi::Object options{info[0].As<Napi::Object>()};
 
 	std::cout << JsonStringify(options, env) << std::endl;
+
+	pipewireThread = std::thread{DeviceChange};
 }
 
 //This callback doesn't appear to be utilized
@@ -63,47 +69,49 @@ void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
 	handleVoiceActivity = voiceCallback;
 }
 
-struct callback {
-	Napi::Function handleDeviceChange;
-	Napi::Env env;
-};
 
-void ExecuteCallback(void* data, std::vector<device_with_id>& audioInputDevices, std::vector<device_with_id>& audioOutputDevices, std::vector<device_with_id>& videoInputDevices)
+void ExecuteCallback(void* data)
 {
-	callback cb = *static_cast<callback*>(data);
-	Napi::Function handleDeviceChange = cb.handleDeviceChange;
-	Napi::Env env = cb.env;
+	auto* tsfn = static_cast<Napi::ThreadSafeFunction*>(data);
+	tsfn->BlockingCall((void*)nullptr, [&](Napi::Env env, Napi::Function jsCallback, void*){
+		Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
+		Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
+		Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
 
-	Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
-	Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
-	Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
+		auto audioInputDevices = GetAudioInputDevices();
+		auto audioOutputDevices = GetAudioOutputDevices();
+		auto videoInputDevices = GetVideoDevices();
+	
+		int i{};
+		for(auto curr{audioInputDevices.cbegin()}; curr != audioInputDevices.cend(); i++, curr++) {
+			Napi::Object audioInputDevice{Napi::Object::New(env)};
+			audioInputDevice.Set("name", curr->description);
+			audioInputDevice.Set("guid", "");
+			audioInputDevice.Set("index", i);
+			audioInputDevicesArray[i] = audioInputDevice;
+		}
 
-	for(int i{}; i < audioInputDevices.size(); i++) {
-		Napi::Object audioInputDevice{Napi::Object::New(env)};
-		audioInputDevice.Set("name", audioInputDevices[i].description);
-		audioInputDevice.Set("guid", "");
-		audioInputDevice.Set("index", i);
-		audioInputDevicesArray[i] = audioInputDevice;
-	}
+		i = 0;
+		for(auto curr{audioOutputDevices.cbegin()}; curr != audioOutputDevices.cend(); i++, curr++) {
+			Napi::Object audioOutputDevice{Napi::Object::New(env)};
+			audioOutputDevice.Set("name", curr->description);
+			audioOutputDevice.Set("guid", "");
+			audioOutputDevice.Set("index", i);
+			audioOutputDevicesArray[i] = audioOutputDevice;
+		}
 
-	for(int i{}; i < audioOutputDevices.size(); i++) {
-		Napi::Object audioOutputDevice{Napi::Object::New(env)};
-		audioOutputDevice.Set("name", audioOutputDevices[i].description);
-		audioOutputDevice.Set("guid", "");
-		audioOutputDevice.Set("index", i);
-		audioOutputDevicesArray[i] = audioOutputDevice;
-	}
+		i = 0;
+		for(auto curr{videoInputDevices.cbegin()}; curr != videoInputDevices.cend(); i++, curr++) {
+			Napi::Object videoInputDevice{Napi::Object::New(env)};
+			videoInputDevice.Set("name", curr->description);
+			videoInputDevice.Set("guid", curr->name);
+			videoInputDevice.Set("index", i);
+			videoInputDevice.Set("facing", "unknown");
+			videoInputDevicesArray[i] = videoInputDevice;
+		}
 
-	for(int i{}; i < videoInputDevices.size(); i++) {
-		Napi::Object videoInputDevice{Napi::Object::New(env)};
-		videoInputDevice.Set("name", videoInputDevices[i].description);
-		videoInputDevice.Set("guid", videoInputDevices[i].name);
-		videoInputDevice.Set("index", i);
-		videoInputDevice.Set("facing", "unknown");
-		videoInputDevicesArray[i] = videoInputDevice;
-	}
-
-	handleDeviceChange.Call(env.Global(), {audioInputDevicesArray, audioOutputDevicesArray, videoInputDevicesArray});
+		jsCallback.Call(env.Global(), {audioInputDevicesArray, audioOutputDevicesArray, videoInputDevicesArray});
+	});
 }
 
 
@@ -124,11 +132,15 @@ void SetDeviceChangeCallback(const Napi::CallbackInfo& info) {
 		return;
 	}
 
-	Napi::Function deviceCallback{info[0].As<Napi::Function>()};
-	callback cb{deviceCallback, env};
-	callback_executor ce{ExecuteCallback, &cb};
+	tsfn = Napi::ThreadSafeFunction::New(env, info[0].As<Napi::Function>(), "Device Change Function", 0, 1);
+	executor = callback_executor{ExecuteCallback, &tsfn};
+	auto ce = GetExecutor();
 
-	DeviceChange(ce);
+	if(ce) {
+		static_cast<Napi::ThreadSafeFunction*>(ce->callback)->Release();
+	}
+
+	SetExecutor(&executor);
 }
 
 void GetOutputDevices(const Napi::CallbackInfo& info) {
@@ -148,11 +160,12 @@ void GetOutputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array audioOutputDevicesArray{Napi::Array::New(env)};
 
-	std::vector<device> outputDevices = ListDevices(deviceType::audio_output);
+	std::list<device_with_id> audioOutputDevices = GetAudioOutputDevices();
 
-	for(int i{}; i < outputDevices.size(); i++) {
+	int i{};
+	for(auto curr{audioOutputDevices.cbegin()}; curr != audioOutputDevices.cend(); i++, curr++) {
 			Napi::Object audioOutputDevice{Napi::Object::New(env)};
-			audioOutputDevice.Set("name", outputDevices[i].description);
+			audioOutputDevice.Set("name", curr->description);
 			audioOutputDevice.Set("guid", "");
 			audioOutputDevice.Set("index", i);
 			audioOutputDevicesArray[i] = audioOutputDevice;
@@ -178,11 +191,12 @@ void GetInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array audioInputDevicesArray{Napi::Array::New(env)};
 
-	std::vector<device> inputDevices = ListDevices(deviceType::audio_input);
+	std::list<device_with_id> audioInputDevices = GetAudioInputDevices();
 
-	for(int i{}; i < inputDevices.size(); i++) {
+	int i{};
+        for(auto curr{audioInputDevices.cbegin()}; curr != audioInputDevices.cend(); i++, curr++) {
 			Napi::Object audioInputDevice{Napi::Object::New(env)};
-			audioInputDevice.Set("name", inputDevices[i].description);
+			audioInputDevice.Set("name", curr->description);
 			audioInputDevice.Set("guid", "");
 			audioInputDevice.Set("index", i);
 			audioInputDevicesArray[i] = audioInputDevice;
@@ -208,12 +222,13 @@ void GetVideoInputDevices(const Napi::CallbackInfo& info) {
 
 	Napi::Array videoInputDevicesArray{Napi::Array::New(env)};
 
-	std::vector<device> videoInputDevices = ListDevices(deviceType::video_input);
+	std::list<device_with_id> videoInputDevices = GetVideoDevices();
 
-	for(int i{}; i < videoInputDevices.size(); i++) {
+	int i{};
+	for(auto curr{videoInputDevices.cbegin()}; curr != videoInputDevices.cend(); i++, curr++) {
 		Napi::Object videoInputDevice{Napi::Object::New(env)};
-		videoInputDevice.Set("name", videoInputDevices[i].description);
-		videoInputDevice.Set("guid", videoInputDevices[i].name); 
+		videoInputDevice.Set("name", curr->description);
+		videoInputDevice.Set("guid", curr->name); 
 		videoInputDevice.Set("index", i);
 		videoInputDevice.Set("facing", "unknown");
 		videoInputDevicesArray[i] = videoInputDevice;

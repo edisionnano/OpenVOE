@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <list>
 
 #include <pipewire/pipewire.h>
 
@@ -12,8 +13,18 @@ struct device_with_id {
 };
 
 struct callback_executor {
-	void (*executor)(void*, std::vector<device_with_id>&, std::vector<device_with_id>&, std::vector<device_with_id>&);
+	void (*executor)(void*);
 	void* callback;
 };
 
-int DeviceChange(callback_executor ce);
+int DeviceChange();
+
+void SetExecutor(callback_executor* new_executor);
+
+callback_executor* GetExecutor();
+
+std::list<device_with_id> GetAudioInputDevices();
+
+std::list<device_with_id> GetAudioOutputDevices();
+
+std::list<device_with_id> GetVideoDevices();
