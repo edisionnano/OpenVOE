@@ -1,16 +1,85 @@
 #include "device_change.h"
 
-#include <atomic>
-#include <mutex>
-
 std::list<device_with_id> audioInputDevices{};
 std::list<device_with_id> audioOutputDevices{};
 std::list<device_with_id> videoInputDevices{};
 std::mutex devices_mutex{};
 
+struct pw_main_loop* loop;
+
 std::atomic<callback_executor*> current_executor{nullptr};
 
-static void registry_event_global(void*,
+static void on_process(void *userdata)
+{
+        struct video_data *data = (video_data*)userdata;
+        struct pw_buffer *b;
+        struct spa_buffer *buf;
+        uint8_t *map;
+        uint8_t *sdata;
+
+        if ((b = pw_stream_dequeue_buffer(data->stream)) == NULL) {
+                pw_log_warn("out of buffers: %m");
+                return;
+        }
+
+        buf = b->buffer;
+
+        printf("got a frame of size %d and height %d\n", buf->datas[0].chunk->size, data->format.info.mjpg.size.height);
+
+        if (buf->datas[0].type == SPA_DATA_MemFd ||
+            buf->datas[0].type == SPA_DATA_DmaBuf) {
+                map = (uint8_t*)mmap(NULL, buf->datas[0].maxsize + buf->datas[0].mapoffset, PROT_READ,
+                           MAP_PRIVATE, buf->datas[0].fd, 0);
+                sdata = (uint8_t*)SPA_PTROFF(map, buf->datas[0].mapoffset, uint8_t);
+        } else if (buf->datas[0].type == SPA_DATA_MemPtr) {
+                map = NULL;
+                sdata = (uint8_t*)buf->datas[0].data;
+	}
+
+	uint8_t* dst_y = new uint8_t;
+        uint8_t* dst_u = new uint8_t;
+        uint8_t* dst_v = new uint8_t;
+
+	int ret = libyuv::ConvertToI420(sdata, buf->datas[0].chunk->size,
+					dst_y, data->format.info.mjpg.size.width, 
+					dst_u, (data->format.info.mjpg.size.width +1) / 2,
+					dst_v, (data->format.info.mjpg.size.width +1) / 2,
+					0, 0, data->format.info.mjpg.size.width, data->format.info.mjpg.size.height,
+					data->format.info.mjpg.size.width, data->format.info.mjpg.size.height, libyuv::kRotate0, libyuv::FOURCC_MJPG);
+
+	delete(dst_y);
+	delete(dst_u);
+	delete(dst_v);
+
+        pw_stream_queue_buffer(data->stream, b);
+}
+
+static void on_param_changed(void *userdata, uint32_t id, const struct spa_pod *param)
+{
+        struct video_data *data = (video_data*)userdata;
+
+        if (param == NULL || id != SPA_PARAM_Format)
+                return;
+
+        if (spa_format_parse(param,
+                        &data->format.media_type,
+                        &data->format.media_subtype) < 0)
+                return;
+
+        if (data->format.media_type != SPA_MEDIA_TYPE_video ||
+            data->format.media_subtype != SPA_MEDIA_SUBTYPE_mjpg)
+                return;
+
+        if (spa_format_video_mjpg_parse(param, &data->format.info.mjpg) < 0)
+                return;
+}
+
+static const struct pw_stream_events stream_events = {
+        .version = PW_VERSION_STREAM_EVENTS,
+        .param_changed = on_param_changed,
+        .process = on_process};
+
+static void registry_event_global(void* data,
                                   uint32_t id,
                                   uint32_t permissions,
                                   const char* type,
@@ -81,8 +150,45 @@ static const struct pw_registry_events registry_events_change = {
     .global = registry_event_global,
     .global_remove = registry_event_global_remove};
 
+int CaptureFrames()
+{
+        struct video_data data = { 0, };
+        const struct spa_pod *params[1];
+        uint8_t buffer[1024];
+        struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+        struct pw_properties *props;
+
+        data.loop = loop;
+
+        props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Video",
+                        PW_KEY_MEDIA_CATEGORY, "Capture",
+                        PW_KEY_MEDIA_ROLE, "Camera",
+                        NULL);
+
+        data.stream = pw_stream_new_simple(
+                        pw_main_loop_get_loop(data.loop),
+                        "video-capture",
+                        props,
+                        &stream_events,
+                        &data);
+
+        params[0] = (spa_pod*)spa_pod_builder_add_object(&b,
+                SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
+                SPA_FORMAT_mediaType,       SPA_POD_Id(SPA_MEDIA_TYPE_video),
+                SPA_FORMAT_mediaSubtype,    SPA_POD_Id(SPA_MEDIA_SUBTYPE_mjpg));
+
+        pw_stream_connect(data.stream,
+                          PW_DIRECTION_INPUT,
+                          PW_ID_ANY,
+                          static_cast<pw_stream_flags>(PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_AUTOCONNECT),
+                          params, 1);
+
+        pw_stream_destroy(data.stream);
+
+        return 0;
+}
+
 int DeviceChange() {
-  struct pw_main_loop* loop;
   struct pw_context* context;
   struct pw_core* core;
   struct pw_registry* registry;
@@ -90,16 +196,15 @@ int DeviceChange() {
 
   pw_init(NULL, NULL);
 
-  loop = pw_main_loop_new(NULL /* properties */);
+  loop = pw_main_loop_new(NULL);
   context = pw_context_new(pw_main_loop_get_loop(loop),
-                           NULL /* properties */,
-                           0 /* user_data size */);
+                           NULL, 0);
 
   core = pw_context_connect(
-      context, NULL /* properties */, 0 /* user_data size */);
+      context, NULL, 0);
 
   registry =
-      pw_core_get_registry(core, PW_VERSION_REGISTRY, 0 /* user_data size */);
+      pw_core_get_registry(core, PW_VERSION_REGISTRY, 0);
 
   spa_zero(registry_listener);
   pw_registry_add_listener(
@@ -111,6 +216,7 @@ int DeviceChange() {
   pw_core_disconnect(core);
   pw_context_destroy(context);
   pw_main_loop_destroy(loop);
+  pw_deinit();
 
   return 0;
 }

@@ -261,6 +261,30 @@ void GetVideoInputDevices(const Napi::CallbackInfo& info) {
   deviceCallback.Call(env.Global(), {videoInputDevicesArray});
 }
 
+//Called when testing your webcam on voice and video settings
+//Captures webcam frames and sends them directly to chromium
+//using a function only available on Discord's electron fork
+//which is imported using dlopen
+void AddDirectVideoOutputSink(const Napi::CallbackInfo& info) {
+  Napi::Env env{info.Env()};
+
+
+  if (info.Length() != 1) {
+    Napi::TypeError::New(env, "Wrong number of arguments, 1 expected")
+        .ThrowAsJavaScriptException();
+    return;
+  }
+
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "Wrong argument type, String expected")
+        .ThrowAsJavaScriptException();
+    return;
+  }
+
+  CaptureFrames();
+}
+
+
 // Called by index.js, its purpose is to store
 // the allocator callback that will be used at a later phase
 void SetImageDataAllocator(const Napi::CallbackInfo& info) {
@@ -316,7 +340,7 @@ void ConsoleLog(const Napi::CallbackInfo& info) {
   }
 
   if (!info[0].IsString() || !info[1].IsString()) {
-    Napi::TypeError::New(env, "Wrong argument type, Callback expected")
+    Napi::TypeError::New(env, "Wrong argument type, String expected")
         .ThrowAsJavaScriptException();
     return;
   }
@@ -539,6 +563,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("getInputDevices", Napi::Function::New(env, GetInputDevices));
   exports.Set("getVideoInputDevices",
               Napi::Function::New(env, GetVideoInputDevices));
+  exports.Set("addDirectVideoOutputSink", 
+              Napi::Function::New(env, AddDirectVideoOutputSink));
   exports.Set("setImageDataAllocator",
               Napi::Function::New(env, SetImageDataAllocator));
   exports.Set("setVolumeChangeCallback",
