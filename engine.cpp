@@ -529,7 +529,10 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   DegradationPreference.Set("BALANCED", 2);
   DegradationPreference.Set("DISABLED", 3);
 
+  Napi::Number SupportedSecureFramesProtocolVersion{Napi::Number::New(env, 111)};
+
   exports.Set("DegradationPreference", DegradationPreference);
+  exports.Set("SupportedSecureFramesProtocolVersion", SupportedSecureFramesProtocolVersion);
   exports.Set("initialize", Napi::Function::New(env, Initialize));
   exports.Set("setOnVoiceCallback",
               Napi::Function::New(env, SetOnVoiceCallback));
