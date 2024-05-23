@@ -73,6 +73,27 @@ void SetOnVoiceCallback(const Napi::CallbackInfo& info) {
   handleVoiceActivity = voiceCallback;
 }
 
+// Tells us which codecs are supported (h264, h265, av1)
+// Also gets called with a different array to tell us
+// to duck and/or flush the idle jitter buffer (WebRTC)
+void SetTransportOptions(const Napi::CallbackInfo& info) {
+  Napi::Env env{info.Env()};
+
+  if (info.Length() != 1) {
+    Napi::TypeError::New(env, "Wrong number of arguments, 1 expected")
+    .ThrowAsJavaScriptException();
+    return;
+  }
+
+  if (!info[0].IsObject()) {
+    Napi::TypeError::New(env, "Wrong argument type, Object expected")
+    .ThrowAsJavaScriptException();
+    return;
+  }
+
+  Napi::Object transportOptions{info[0].As<Napi::Object>()};
+}
+
 void ExecuteCallback(void* data) {
   auto* tsfn = static_cast<Napi::ThreadSafeFunction*>(data);
   tsfn->BlockingCall(
@@ -531,24 +552,34 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 
   Napi::Number SupportedSecureFramesProtocolVersion{Napi::Number::New(env, 111)};
 
-  exports.Set("DegradationPreference", DegradationPreference);
-  exports.Set("SupportedSecureFramesProtocolVersion", SupportedSecureFramesProtocolVersion);
-  exports.Set("initialize", Napi::Function::New(env, Initialize));
+  exports.Set("DegradationPreference",
+              DegradationPreference);
+  exports.Set("SupportedSecureFramesProtocolVersion",
+              SupportedSecureFramesProtocolVersion);
+  exports.Set("initialize",
+              Napi::Function::New(env, Initialize));
   exports.Set("setOnVoiceCallback",
               Napi::Function::New(env, SetOnVoiceCallback));
+  exports.Set("setTransportOptions",
+              Napi::Function::New(env, SetTransportOptions));
   exports.Set("setDeviceChangeCallback",
               Napi::Function::New(env, SetDeviceChangeCallback));
-  exports.Set("getOutputDevices", Napi::Function::New(env, GetOutputDevices));
-  exports.Set("getInputDevices", Napi::Function::New(env, GetInputDevices));
+  exports.Set("getOutputDevices",
+              Napi::Function::New(env, GetOutputDevices));
+  exports.Set("getInputDevices",
+              Napi::Function::New(env, GetInputDevices));
   exports.Set("getVideoInputDevices",
               Napi::Function::New(env, GetVideoInputDevices));
   exports.Set("setImageDataAllocator",
               Napi::Function::New(env, SetImageDataAllocator));
   exports.Set("setVolumeChangeCallback",
               Napi::Function::New(env, SetVolumeChangeCallback));
-  exports.Set("consoleLog", Napi::Function::New(env, ConsoleLog));
-  exports.Set("setAecDump", Napi::Function::New(env, SetAecDump));
-  exports.Set("rankRtcRegions", Napi::Function::New(env, RankRtcRegions));
+  exports.Set("consoleLog",
+              Napi::Function::New(env, ConsoleLog));
+  exports.Set("setAecDump",
+              Napi::Function::New(env, SetAecDump));
+  exports.Set("rankRtcRegions",
+              Napi::Function::New(env, RankRtcRegions));
   return exports;
 }
 
