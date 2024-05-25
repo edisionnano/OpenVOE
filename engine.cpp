@@ -91,7 +91,7 @@ void SetTransportOptions(const Napi::CallbackInfo& info) {
     return;
   }
 
-  Napi::Object transportOptions{info[0].As<Napi::Object>()};
+  Napi::Object options{info[0].As<Napi::Object>()};
 }
 
 void ExecuteCallback(void* data) {
